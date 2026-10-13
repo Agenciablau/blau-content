@@ -14,7 +14,7 @@ Planificación de contenidos, calendarios por cliente y aprobación de publicaci
 
 En Cloudflare, a nivel de cuenta: **Almacenamiento y bases de datos → D1 → Crear base de datos**.
 
-Nombre: `blau-content-db`. Copia el **Database ID / UUID** que aparece en sus detalles. No uses el ID de cuenta ni el ID de zona.
+Nombre: `blau-content-db`. La configuración ya contiene su identificador `905b8e7d-edd9-46c6-94f5-97e71a187eba`. Si despliegas en otra cuenta, reemplaza este identificador en `wrangler.jsonc` o usa la variable de compilación `CLOUDFLARE_D1_ID`.
 
 ## 2. Conectar GitHub
 
@@ -26,7 +26,7 @@ En **Cómputo → Workers y Pages → Crear aplicación → Conectar GitHub**, s
 | Directorio raíz | `/` o vacío |
 | Comando de compilación | `npm run build` |
 | Comando de despliegue | `npm run deploy` |
-| Variable de compilación `CLOUDFLARE_D1_ID` | UUID real de D1 |
+| Base D1 | `blau-content-db`, ya conectada en `wrangler.jsonc` |
 | Node.js | 22.13 o superior |
 
 El comando de despliegue conecta la base y aplica las migraciones antes de publicar. Su token de compilación necesita permisos **Workers Scripts: Edit** y **D1: Edit** para esa cuenta. Si el token generado por el asistente no incluye D1, configura un token con ambos permisos en los ajustes de Builds. Nunca guardes el token en GitHub ni lo compartas en un mensaje.

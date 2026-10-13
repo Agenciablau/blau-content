@@ -1,9 +1,9 @@
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
-const id=process.env.CLOUDFLARE_D1_ID;
-if(!id||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))throw Error('Configura CLOUDFLARE_D1_ID en las variables de compilación de Cloudflare. Crea primero la base D1 blau-content-db.');
 const config=JSON.parse(readFileSync('wrangler.jsonc','utf8'));
+const id=process.env.CLOUDFLARE_D1_ID??config.d1_databases?.find(db=>db.binding==='DB')?.database_id;
+if(!id||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))throw Error('Configura el identificador de D1 en wrangler.jsonc o en CLOUDFLARE_D1_ID.');
 config.main=resolve(config.main);config.assets.directory=resolve(config.assets.directory);
 config.d1_databases=[{binding:'DB',database_name:'blau-content-db',database_id:id,migrations_dir:resolve('migrations')}];
 config.keep_vars=true;
