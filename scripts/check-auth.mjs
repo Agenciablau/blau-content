@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
+import {generateKeyPair,SignJWT} from 'jose';
+const src=ts.transpileModule(readFileSync('worker/auth.ts','utf8').replace("from 'jose'",`from '${import.meta.resolve('jose')}'`),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {authenticate}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+const {privateKey,publicKey}=await generateKeyPair('RS256');
+const keys=async()=>publicKey;
+const env={TEAM_DOMAIN:'https://blau-test.cloudflareaccess.com',POLICY_AUD:'test-audience'};
+async function token(options={}){return new SignJWT(options.payload??{email:'OWNER@example.com'}).setProtectedHeader({alg:'RS256'}).setSubject('verified-subject').setIssuedAt().setExpirationTime(options.exp??'1h').setIssuer(options.issuer??env.TEAM_DOMAIN).setAudience(options.aud??env.POLICY_AUD).sign(privateKey);}
+const request=t=>new Request('https://app.agenciablau.com/',{headers:t?{'Cf-Access-Jwt-Assertion':t}: {}});
+assert.equal(await authenticate(request(),env,keys),null);
+assert.equal(await authenticate(new Request('https://app.agenciablau.com/',{headers:{'Cf-Access-Authenticated-User-Email':'owner@example.com','oai-authenticated-user-email':'owner@example.com'}}),env,keys),null);
+assert.equal((await authenticate(request(await token()),env,keys)).email,'owner@example.com');
+for(const options of [{aud:'wrong-audience'},{issuer:'https://evil.example'},{exp:Math.floor(Date.now()/1000)-60},{payload:{name:'Missing email'}}])assert.equal(await authenticate(request(await token(options)),env,keys),null);
+assert.equal(await authenticate(request('invalid.jwt'),env,keys),null);
+assert.equal(await authenticate(request(await token()),{},keys),null);
+assert.equal(await authenticate(request(await token()),{...env,TEAM_DOMAIN:'http://blau-test.cloudflareaccess.com'},keys),null);
+const other=await generateKeyPair('RS256');assert.equal(await authenticate(request(await token()),env,async()=>other.publicKey),null);
+console.log('Passed: signed identity, audience, issuer, expiry, invalid signatures, spoofed headers and missing configuration.');

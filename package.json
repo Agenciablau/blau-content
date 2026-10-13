@@ -1,0 +1,33 @@
+{
+  "name": "blau-content",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:worker": "wrangler dev",
+    "build": "tsc --noEmit && vite build",
+    "test": "node scripts/check-workspace.mjs && node scripts/check-auth.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "check:worker": "wrangler deploy --dry-run --outdir .worker-build"
+  },
+  "dependencies": {
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "lucide-react": "1.31.0",
+    "jose": "^6.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "6.0.2",
+    "vite": "8.0.13",
+    "typescript": "5.9.3",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@types/node": "22.19.19",
+    "@cloudflare/workers-types": "4.20260515.1",
+    "wrangler": "4.92.0"
+  }
+}
