@@ -41,7 +41,9 @@ En el Worker publicado, abre **Domains** (o **Settings → Domains & Routes**) y
 
 En **Zero Trust / Cloudflare One → Access → Applications**, crea una aplicación **Self-hosted** para `app.agenciablau.com`, cubriendo todas las rutas, sin reglas Bypass.
 
-Configura **One-time PIN** como método de inicio de sesión y una política **Allow → Emails** con el correo del administrador. Añade los correos del equipo y clientes cuando deban entrar. Registra también sus roles en la pestaña **Accesos** de Blau Content.
+Configura **One-time PIN** como método de inicio de sesión y una política **Allow → Include → Login Methods → One-time PIN** para esta aplicación. Retira la lista de correos de esa política y no utilices Bypass. Cloudflare verifica la identidad de cualquier correo, pero Blau Content autoriza cada petición según los correos y roles guardados en D1. Los correos sin registrar reciben 403 y no pueden crear el espacio ni consultar o modificar contenidos.
+
+Después de esta configuración inicial, las altas y revocaciones se hacen únicamente en **Accesos** de Blau Content: añade el correo, selecciona Cliente o Equipo y asigna su marca. Comparte el enlace de la app. No es necesario modificar Cloudflare para cada usuario y no se envían invitaciones automáticas. Esta política debe estar vinculada únicamente a la aplicación de Blau Content, ya que otras aplicaciones necesitan su propio control de autorización.
 
 En los detalles de la aplicación Access, copia su **Application Audience (AUD)**. Copia también tu dominio de equipo, de la forma `https://tu-equipo.cloudflareaccess.com`.
 
@@ -49,7 +51,7 @@ En el Worker, añade estas variables de ejecución en **Settings → Variables a
 
 | Variable | Valor |
 |---|---|
-| `ADMIN_EMAIL` | Tu correo de administrador, el mismo autorizado en Access |
+| `ADMIN_EMAIL` | Tu correo de administrador, el que utilizarás para crear el espacio |
 | `TEAM_DOMAIN` | `https://tu-equipo.cloudflareaccess.com` |
 | `POLICY_AUD` | AUD de la aplicación Access |
 | `APP_ORIGIN` | `https://app.agenciablau.com` |
@@ -69,7 +71,7 @@ Para conservar los datos del prototipo de ChatGPT:
 3. Selecciona el JSON exportado. La importación solo funciona en un espacio vacío y conserva los ID, fechas, conversaciones e historial existente.
 4. El administrador de la nueva app será el correo configurado en Cloudflare; la identidad antigua no se importa como propietario.
 
-La importación admite hasta 4.000 registros en una operación. Las referencias y el formato se validan y la escritura es atómica. Los usuarios importados deben estar autorizados también en Cloudflare Access. Los archivos enlazados no se copian; revisa sus permisos. Las aprobaciones anteriores a la incorporación del historial no tienen un registro retroactivo.
+La importación admite hasta 4.000 registros en una operación. Las referencias y el formato se validan y la escritura es atómica. Los usuarios importados reciben los permisos registrados en la copia y pueden verificar su correo mediante Cloudflare Access. Los archivos enlazados no se copian; revisa sus permisos. Las aprobaciones anteriores a la incorporación del historial no tienen un registro retroactivo.
 
 ## Desarrollo y comprobaciones
 

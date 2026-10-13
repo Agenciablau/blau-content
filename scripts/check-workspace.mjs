@@ -94,3 +94,17 @@ await post({action:'import',backup});
 assert.equal((await get()).posts.length,backup.posts.length);
 assert.equal((await get()).reviews.length,backup.reviews.length);
 console.log('Passed: restricted administrator bootstrap, empty-space import and review history preservation.');
+
+// A verified email gains access only after an administrator registers it in D1.
+identity={userId:'new-client',email:'new-client@example.com',displayName:'New client'};
+await get(403);await post({action:'init'},403);await post({action:'client',name:'Denied',color:'#111111'},403);
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+await post({action:'member',email:'new-client@example.com',role:'client',client_id:b.id});
+identity={userId:'new-client',email:'new-client@example.com',displayName:'New client'};
+let added=await get();assert.equal(added.role,'client');assert.ok(added.posts.every(p=>p.client_id===b.id));assert.equal(added.members.length,0);
+await post({action:'member',email:'self-upgrade@example.com',role:'team'},403);
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+await post({action:'removeMember',email:'new-client@example.com'});
+identity={userId:'new-client',email:'new-client@example.com',displayName:'New client'};
+await get(403);await post({action:'comment',id:published.id,body:'Access revoked'},403);
+console.log('Passed: app-only onboarding, unregistered verified identities, scoped client access and immediate API revocation.');
