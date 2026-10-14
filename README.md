@@ -124,3 +124,7 @@ Do not grant access or make all Drive files public just to configure Buffer. Onl
 Development validation: `npm test` includes mocked Buffer/Google/R2 integration tests. Live verification still requires the service setup above and an approved test post in a dedicated Instagram account.
 
 Stories accept one JPG, PNG or MP4 Drive file. Reels and carousels keep their existing local review flow and are never copied to R2 or sent to Buffer by this automation. Large videos require live validation against the actual Workers plan and network conditions; R2 storage pricing is separate.
+
+### Comment inbox
+
+The Comentarios tab uses the approvals card grid and existing date/client/platform/format filters. Each new comment stores its authenticated author role; the latest unresolved message assigns the conversation to the other side (client ↔ team). Approval resolves prior comments atomically, while later messages reopen the inbox. Administrator preview messages are stored as team messages. Existing comments have unknown author roles and remain available in conversations, but do not generate potentially incorrect inbox assignments. New backup exports preserve roles and resolution; old backups retain their historical messages without assigning them to an inbox. Deployment applies migration 0004_comment_inbox.sql.

@@ -36,7 +36,7 @@ async function GET(req?:Request){
  const cl=await c.db.prepare(client?'SELECT * FROM clients WHERE id=?':'SELECT * FROM clients ORDER BY name').bind(...(client?[c.clientId]:[])).all();
  const p=await c.db.prepare(client?"SELECT * FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador') ORDER BY date":"SELECT * FROM posts ORDER BY date").bind(...(client?[c.clientId]:[])).all();
  const scope=client?" WHERE post_id IN (SELECT id FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador'))":'';
- const co=await c.db.prepare('SELECT * FROM comments'+scope+' ORDER BY created_at').bind(...(client?[c.clientId]:[])).all();
+ const co=await c.db.prepare('SELECT * FROM comments'+scope+' ORDER BY created_at, rowid').bind(...(client?[c.clientId]:[])).all();
  const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+scope+' ORDER BY created_at DESC').bind(...(client?[c.clientId]:[])).all();
  const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id FROM members WHERE role='client' ORDER BY email").all():{results:[]};
  const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?" WHERE client_id=? AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))":'')).bind(...(client?[c.clientId]:[])).all();
@@ -113,7 +113,7 @@ async function POST(req:Request){
   if(existing&&c.role==='client'&&(existing.client_id!==c.clientId||['Idea','Borrador'].includes(existing.status)))return fail('Sin permiso.',403);
   if(b.action==='comment'){
    const body=str(b.body);if(!body)return fail('Escribe un comentario.');
-   await c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,body,new Date().toISOString()).run();
+   await c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved) VALUES(?,?,?,?,?,?,0)').bind(crypto.randomUUID(),existing.id,c.user.displayName,body,new Date().toISOString(),c.role==='client'&&!preview?'client':'team').run();
   }else if(b.action==='review'){
    if(!['Aprobado','Cambios solicitados'].includes(b.status)||existing.status!=='En revisión')return fail('Solo se pueden revisar publicaciones pendientes.');
    if(b.status==='Cambios solicitados'&&!str(b.body))return fail('Indica los cambios que necesitas.');
@@ -121,7 +121,8 @@ async function POST(req:Request){
    const version=now+':'+crypto.randomUUID();
    const operations=[c.db.prepare('UPDATE posts SET status=?,updated_at=? WHERE id=? AND updated_at=?').bind(b.status,version,existing.id,b.updated_at),c.db.prepare('INSERT INTO reviews(id,post_id,actor,email,role,decision,snapshot,created_at) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND updated_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,c.user.email,preview?'team':c.role,b.status,JSON.stringify(existing),now,existing.id,version)];
    if(!preview&&c.role==='client'&&b.status==='Aprobado'&&existing.channel==='Instagram'&&existing.format==='Historia')operations.push(c.db.prepare("INSERT INTO buffer_jobs(post_id,client_id,state,mode,snapshot,created_at,updated_at) SELECT id,client_id,'queued','automatic',?,?,? FROM posts WHERE id=? AND updated_at=? ON CONFLICT(post_id) DO UPDATE SET state='queued',mode='automatic',snapshot=excluded.snapshot,error='',updated_at=excluded.updated_at WHERE buffer_jobs.state IN ('error','cancelled') AND buffer_jobs.assets='[]'").bind(JSON.stringify({approvedVersion:version}),now,now,existing.id,version));
-   if(str(b.body))operations.push(c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND updated_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,str(b.body),now,existing.id,version));
+   if(str(b.body))operations.push(c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND updated_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,str(b.body),now,c.role==='client'&&!preview?'client':'team',b.status==='Aprobado'?1:0,existing.id,version));
+   if(b.status==='Aprobado')operations.push(c.db.prepare('UPDATE comments SET resolved=1 WHERE post_id=? AND EXISTS(SELECT 1 FROM posts WHERE id=? AND updated_at=?)').bind(existing.id,existing.id,version));
    const results=await c.db.batch(operations);
    if(!results[0].meta.changes)return fail('La publicación ha cambiado. Actualiza antes de aprobar.',409);
   }else if(b.action==='delete'){

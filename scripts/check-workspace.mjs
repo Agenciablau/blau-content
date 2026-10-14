@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const sql=new DatabaseSync(':memory:');
-for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
+for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{
  constructor(q,args=[]){this.q=q;this.args=args;}
  bind(...args){return new Statement(this.q,args);}
