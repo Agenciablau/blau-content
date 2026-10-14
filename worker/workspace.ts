@@ -2,6 +2,7 @@ import type {Env,User} from './types';
 import {importBackup} from './import-backup';
 import {validateMaterial,materialLinks} from '../shared/material-links';
 import {normalizeClientProfile} from '../shared/client-profile';
+import {lockedBufferStates} from '../shared/buffer-scheduling';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
 const channels=['Instagram','LinkedIn','Email','Blog / web','TikTok','Facebook'];
@@ -38,7 +39,8 @@ async function GET(req?:Request){
  const co=await c.db.prepare('SELECT * FROM comments'+scope+' ORDER BY created_at').bind(...(client?[c.clientId]:[])).all();
  const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+scope+' ORDER BY created_at DESC').bind(...(client?[c.clientId]:[])).all();
  const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id FROM members WHERE role='client' ORDER BY email").all():{results:[]};
- return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,clients:cl.results,posts:p.results,comments:co.results,members:m.results,reviews:history.results},{headers:{'Cache-Control':'no-store'}});
+ const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?" WHERE client_id=? AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))":'')).bind(...(client?[c.clientId]:[])).all();
+ return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,clients:cl.results,posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results,members:m.results,reviews:history.results},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
 async function POST(req:Request){
@@ -71,16 +73,23 @@ async function POST(req:Request){
   const id=str(b.id),current=await c.db.prepare('SELECT id,name FROM clients WHERE id=?').bind(id).first<{id:string;name:string}>();
   if(!current)return fail('Cliente no encontrado.',404);
   if(typeof b.confirmName!=='string'||b.confirmName!==current.name)return fail('Escribe el nombre exacto del cliente para autorizar la eliminación.');
+  if(await c.db.prepare("SELECT post_id FROM buffer_jobs WHERE client_id=? AND state NOT IN ('sent','error','cancelled') LIMIT 1").bind(id).first())return fail('Hay envíos activos o sin confirmar en Buffer. Cancélalos o actualiza su estado antes de eliminar el cliente.',409);
   // Every deletion checks the current name inside the same atomic batch, protecting against a concurrent rename.
-  const guard='EXISTS (SELECT 1 FROM clients WHERE id=? AND name=?)';
+  const cleanupRows=await c.db.prepare('SELECT assets FROM buffer_jobs WHERE client_id=?').bind(id).all<{assets:string}>();
+  const cleanupKeys=cleanupRows.results.flatMap(row=>JSON.parse(row.assets).map((asset:any)=>asset.key));const cleanupId=crypto.randomUUID();
+  const guard="EXISTS (SELECT 1 FROM clients WHERE id=? AND name=? AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE client_id=clients.id AND state NOT IN ('sent','error','cancelled')))";
   const results=await c.db.batch([
+   c.db.prepare(`INSERT INTO media_cleanup(id,object_keys,created_at) SELECT ?,?,? WHERE ${guard}`).bind(cleanupId,JSON.stringify(cleanupKeys),new Date().toISOString(),id,current.name),
    c.db.prepare(`DELETE FROM reviews WHERE post_id IN (SELECT id FROM posts WHERE client_id=?) AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM comments WHERE post_id IN (SELECT id FROM posts WHERE client_id=?) AND ${guard}`).bind(id,id,current.name),
+   c.db.prepare(`DELETE FROM buffer_jobs WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM posts WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM members WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
-   c.db.prepare('DELETE FROM clients WHERE id=? AND name=?').bind(id,current.name)
+   c.db.prepare(`DELETE FROM buffer_bindings WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
+   c.db.prepare(`DELETE FROM clients WHERE id=? AND name=? AND ${guard}`).bind(id,current.name,id,current.name)
   ]);
-  if(!results[4].meta.changes)return fail('El cliente ha cambiado. Vuelve a abrir su ficha antes de eliminarlo.',409);
+  if(!results[7].meta.changes)return fail('El cliente ha cambiado o tiene un envío nuevo. Vuelve a abrir su ficha antes de eliminarlo.',409);
+  try{if(cleanupKeys.length){if(!env.MEDIA)throw Error('R2 no disponible');await env.MEDIA.delete(cleanupKeys);}await c.db.prepare('DELETE FROM media_cleanup WHERE id=?').bind(cleanupId).run();}catch{/* Keep the cleanup queue for the administrator; the database deletion succeeded. */}
  }else if(b.action==='client'){
   if(!staff)return fail('Solo el equipo puede gestionar clientes.',403);
   const name=str(b.name,100),color=str(b.color,7);if(!name||!/^#[0-9a-f]{6}$/i.test(color))return fail('Introduce nombre y color válidos.');
@@ -111,13 +120,17 @@ async function POST(req:Request){
    const now=new Date().toISOString();
    const version=now+':'+crypto.randomUUID();
    const operations=[c.db.prepare('UPDATE posts SET status=?,updated_at=? WHERE id=? AND updated_at=?').bind(b.status,version,existing.id,b.updated_at),c.db.prepare('INSERT INTO reviews(id,post_id,actor,email,role,decision,snapshot,created_at) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND updated_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,c.user.email,preview?'team':c.role,b.status,JSON.stringify(existing),now,existing.id,version)];
+   if(!preview&&c.role==='client'&&b.status==='Aprobado'&&existing.channel==='Instagram'&&existing.format==='Historia')operations.push(c.db.prepare("INSERT INTO buffer_jobs(post_id,client_id,state,mode,snapshot,created_at,updated_at) SELECT id,client_id,'queued','automatic',?,?,? FROM posts WHERE id=? AND updated_at=? ON CONFLICT(post_id) DO UPDATE SET state='queued',mode='automatic',snapshot=excluded.snapshot,error='',updated_at=excluded.updated_at WHERE buffer_jobs.state IN ('error','cancelled') AND buffer_jobs.assets='[]'").bind(JSON.stringify({approvedVersion:version}),now,now,existing.id,version));
    if(str(b.body))operations.push(c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND updated_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,str(b.body),now,existing.id,version));
    const results=await c.db.batch(operations);
    if(!results[0].meta.changes)return fail('La publicación ha cambiado. Actualiza antes de aprobar.',409);
   }else if(b.action==='delete'){
+   const buffer=await c.db.prepare('SELECT state FROM buffer_jobs WHERE post_id=?').bind(existing.id).first<{state:string}>();if(buffer&&lockedBufferStates.includes(buffer.state))return fail('Cancela o resuelve el envío en Buffer antes de eliminar esta publicación.',409);
    if(!staff)return fail('Sin permiso.',403);
    if(existing.status==='Publicado')return fail('Conserva el registro publicado. Puedes crear una nueva versión.');
-   await c.db.batch([c.db.prepare('DELETE FROM reviews WHERE post_id=?').bind(existing.id),c.db.prepare('DELETE FROM comments WHERE post_id=?').bind(existing.id),c.db.prepare('DELETE FROM posts WHERE id=?').bind(existing.id)]);
+   const guard=`EXISTS (SELECT 1 FROM posts WHERE id=? AND updated_at=? AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')})))`;
+   const deleted=await c.db.batch(['reviews','comments','buffer_jobs','posts'].map(table=>c.db.prepare(`DELETE FROM ${table} WHERE ${table==='posts'?'id':'post_id'}=? AND ${guard}`).bind(existing.id,existing.id,existing.updated_at)));
+   if(!deleted[3].meta.changes)return fail('La publicación ha cambiado o tiene un envío activo. Actualiza antes de eliminarla.',409);
   }else{
    if(!staff)return fail('Solo el equipo puede editar contenidos.',403);
    const title=str(b.title,160),copy=str(b.copy,15000),asset=materialLinks(str(b.asset,42000)).join('\n'),date=str(b.date,16);
@@ -128,12 +141,13 @@ async function POST(req:Request){
    if(typeof b.asset==='string'&&b.asset.length>42000)return fail('Los enlaces de material son demasiado largos.');const materialError=validateMaterial(asset,b.format);if(materialError)return fail(materialError);
    if(!await c.db.prepare('SELECT id FROM clients WHERE id=? AND archived=0').bind(str(b.client_id)).first())return fail('Selecciona un cliente activo.');
    if(existing&&existing.client_id!==b.client_id)return fail('El cliente de una publicación no se puede cambiar.');
+   if(existing){const buffer=await c.db.prepare('SELECT state FROM buffer_jobs WHERE post_id=?').bind(existing.id).first<{state:string}>();if(buffer&&lockedBufferStates.includes(buffer.state))return fail('Cancela o resuelve el envío en Buffer antes de editar esta publicación.',409);}
    const changed=existing&&['title','copy','channel','format','date','asset'].some(k=>existing[k]!==({title,copy,date,asset,channel:b.channel,format:b.format} as any)[k]);
    const status=changed&&['Aprobado','Planificado','Publicado'].includes(existing.status)?'En revisión':b.status;
    if(!existing&&['Aprobado','Planificado','Publicado'].includes(status))return fail('Crea el borrador y envíalo a revisión antes de aprobarlo.');
    if(existing&&['Aprobado','Planificado','Publicado'].includes(status)&&!['Aprobado','Planificado','Publicado'].includes(existing.status))return fail('Aprueba el contenido desde la revisión.');
    const now=new Date().toISOString()+':'+crypto.randomUUID();
-   if(existing){const r=await c.db.prepare('UPDATE posts SET title=?,copy=?,channel=?,format=?,date=?,status=?,asset=?,updated_at=? WHERE id=? AND updated_at=?').bind(title,copy,b.channel,b.format,date,status,asset,now,existing.id,b.updated_at).run();if(!r.meta.changes)return fail('Otra persona ha actualizado esta publicación. Recarga para ver los cambios.',409);}
+   if(existing){const r=await c.db.prepare(`UPDATE posts SET title=?,copy=?,channel=?,format=?,date=?,status=?,asset=?,updated_at=? WHERE id=? AND updated_at=? AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')}))`).bind(title,copy,b.channel,b.format,date,status,asset,now,existing.id,b.updated_at).run();if(!r.meta.changes)return fail('Otra persona ha actualizado esta publicación. Recarga para ver los cambios.',409);}
    else await c.db.prepare('INSERT INTO posts(id,client_id,title,copy,channel,format,date,status,asset,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),b.client_id,title,copy,b.channel,b.format,date,status,asset,now).run();
   }
  }else return fail('Acción desconocida.');

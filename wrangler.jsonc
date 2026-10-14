@@ -15,12 +15,19 @@
     "run_worker_first": true
   },
   "keep_vars": true,
+  "triggers": {"crons": ["* * * * *"]},
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "blau-content-db",
       "database_id": "905b8e7d-edd9-46c6-94f5-97e71a187eba",
       "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "blau-content-media"
     }
   ]
 }

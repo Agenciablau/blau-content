@@ -1,8 +1,10 @@
 import {authenticate} from './auth';
 import {createWorkspaceApi} from './workspace';
 import type {Env} from './types';
+import {integrationApi,processStoryQueue} from './integrations';
 function security(response:Response){const h=new Headers(response.headers);h.set('Cache-Control','no-store');h.set('X-Content-Type-Options','nosniff');h.set('Referrer-Policy','same-origin');h.set('X-Frame-Options','DENY');h.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-src https://drive.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");return new Response(response.body,{status:response.status,headers:h});}
 export default {
+ async scheduled(_controller:ScheduledController,env:Env){await processStoryQueue(env);},
  async fetch(request:Request,env:Env):Promise<Response>{
   const url=new URL(request.url);
   if(!env.TEAM_DOMAIN||!env.POLICY_AUD||!env.ADMIN_EMAIL||!env.DB)return security(new Response('Blau Content está pendiente de configuración. Conecta D1 y configura ADMIN_EMAIL, TEAM_DOMAIN y POLICY_AUD en Cloudflare.',{status:503}));
@@ -10,6 +12,7 @@ export default {
   const user=await authenticate(request,env);
   if(!user){if(url.pathname.startsWith('/api/'))return security(Response.json({error:'Inicia sesión con tu correo para acceder.'},{status:401}));return security(new Response('<!doctype html><html lang="es"><meta charset="utf-8"><title>Blau Content</title><h1>Blau Content</h1><p>Inicia sesión mediante el acceso de Cloudflare.</p><a href="/cdn-cgi/access/login">Iniciar sesión</a></html>',{status:401,headers:{'Content-Type':'text/html; charset=utf-8'}}));}
   if(url.pathname==='/auth/logout')return Response.redirect(url.origin+'/cdn-cgi/access/logout',302);
+  if(url.pathname.startsWith('/api/integrations')){try{return security(await integrationApi(request,env,user));}catch{return security(Response.json({error:'No se pudo completar la integración. Revisa la configuración y las migraciones.'},{status:500}));}}
   if(url.pathname==='/api/workspace'){
    if(request.method!=='GET'&&request.method!=='POST')return security(new Response('Método no permitido.',{status:405,headers:{Allow:'GET, POST'}}));
    if(request.method==='POST'&&(request.headers.get('Origin')!==url.origin||!request.headers.get('Content-Type')?.startsWith('application/json')))return security(Response.json({error:'Origen o formato no permitido.'},{status:403}));

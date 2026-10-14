@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const sql=new DatabaseSync(':memory:');
-for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
+for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{
  constructor(q,args=[]){this.q=q;this.args=args;}
  bind(...args){return new Statement(this.q,args);}
@@ -20,9 +20,10 @@ const material=await import(moduleUrl(readFileSync('shared/material-links.ts','u
 globalThis.__blauMaterial=material;
 const profiles=await import(moduleUrl(readFileSync('shared/client-profile.ts','utf8')));
 globalThis.__blauProfiles=profiles;
+const bufferRules=await import(moduleUrl(readFileSync('shared/buffer-scheduling.ts','utf8')));globalThis.__blauBufferRules=bufferRules;
 const {importBackup}=await import(moduleUrl(readFileSync('worker/import-backup.ts','utf8').replace("import {normalizeClientProfile} from '../shared/client-profile';",'const {normalizeClientProfile}=globalThis.__blauProfiles;').replace("import {validateMaterial} from '../shared/material-links';",'const {validateMaterial}=globalThis.__blauMaterial;')));
 globalThis.__blauImport=importBackup;
-const {createWorkspaceApi}=await import(moduleUrl(readFileSync('worker/workspace.ts','utf8').replace("import {normalizeClientProfile} from '../shared/client-profile';",'const {normalizeClientProfile}=globalThis.__blauProfiles;').replace("import {importBackup} from './import-backup';",'const importBackup=globalThis.__blauImport;').replace("import {validateMaterial,materialLinks} from '../shared/material-links';",'const {validateMaterial,materialLinks}=globalThis.__blauMaterial;')));
+const {createWorkspaceApi}=await import(moduleUrl(readFileSync('worker/workspace.ts','utf8').replace("import {lockedBufferStates} from '../shared/buffer-scheduling';",'const {lockedBufferStates}=globalThis.__blauBufferRules;').replace("import {normalizeClientProfile} from '../shared/client-profile';",'const {normalizeClientProfile}=globalThis.__blauProfiles;').replace("import {importBackup} from './import-backup';",'const importBackup=globalThis.__blauImport;').replace("import {validateMaterial,materialLinks} from '../shared/material-links';",'const {validateMaterial,materialLinks}=globalThis.__blauMaterial;')));
 const api={GET:(req)=>createWorkspaceApi(env,identity).GET(req),POST:(req)=>createWorkspaceApi(env,identity).POST(req)};
 async function post(body,expected=200){const r=await api.POST(new Request('https://test.local/api/workspace',{method:'POST',headers:{'Content-Type':'application/json','Origin':'https://test.local'},body:JSON.stringify(body)}));assert.equal(r.status,expected,JSON.stringify(await r.clone().json()));return r.json();}
 async function get(expected=200,preview=''){const r=await api.GET(new Request('https://test.local/api/workspace'+(preview?'?preview='+preview:'')));assert.equal(r.status,expected);return r.json();}
