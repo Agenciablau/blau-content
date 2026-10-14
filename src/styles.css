@@ -81,3 +81,6 @@ button:disabled{cursor:not-allowed}input,select,textarea{border-color:#dce0e5;bo
 
 /* Logo scale: 60% of the previous size; cyan brand actions with readable labels. */
 .brand-logo,.welcome-nav .brand-logo{width:88.8px}.loading-logo{width:76.8px}.primary,.primary:hover{color:#20252b}.day.today .day-header>span{color:#20252b}.toast{color:#20252b}.toast button{color:#20252b}@media(max-width:600px){.brand-logo,.welcome-nav .brand-logo{width:81.6px}.loading-logo{width:69.6px}}
+
+/* Dates and content totals use dark grey independently of brand accents. */
+.month-controls h2,.day-header>span,.day.today .day-header>span,.date-filter-fields label,.date-filter-fields input,.format-count-heading small,.format-count-item strong,.format-count-total,.stats strong,.stats small,.stat-caption,.review-card .review-meta,.table-panel td:nth-child(4),.detail-meta .meta-item:nth-child(-n+2) strong{color:#3f454d}
