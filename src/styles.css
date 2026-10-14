@@ -84,3 +84,30 @@ button:disabled{cursor:not-allowed}input,select,textarea{border-color:#dce0e5;bo
 
 /* Dates and content totals use dark grey independently of brand accents. */
 .month-controls h2,.day-header>span,.day.today .day-header>span,.date-filter-fields label,.date-filter-fields input,.format-count-heading small,.format-count-item strong,.format-count-total,.stats strong,.stats small,.stat-caption,.review-card .review-meta,.table-panel td:nth-child(4),.detail-meta .meta-item:nth-child(-n+2) strong{color:#3f454d}
+
+/* Responsive layout contract: flexible children, consistent control rows, bounded overlays. */
+.main,.content,.page-heading>div,.overview-grid>*,.review-grid>*,.clients-grid>*,.stats>div,.form-grid>*,.meta-item>div{min-width:0}
+.content{width:100%}.content h1,.content h2,.client-pill,.client-card p,.copy-box p,.comments p,.review-history pre{overflow-wrap:anywhere}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));align-items:start;gap:12px}.filters .search{min-width:0;max-width:none;width:100%}.filters>select{width:100%;max-width:100%;min-width:0}.filters select[aria-label="Filtrar por tipo de publicación"]{max-width:100%}.filters>.date-filter-fields{grid-column:1/-1}.filters>.text-btn{min-height:40px;justify-self:start}
+.date-filter-fields{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:0}.date-filter-fields label{display:flex;flex-direction:column;align-items:stretch;gap:6px;flex:0 1 180px;min-width:0}.date-filter-fields input{width:100%;min-width:0;min-height:40px}.date-filter-fields>.text-btn{min-height:40px}.date-filter-error{flex-basis:100%}
+.primary,.secondary-btn{white-space:normal;text-align:center;overflow-wrap:anywhere;max-width:100%}.primary svg,.secondary-btn svg,.text-btn svg,.client-links i{flex-shrink:0}
+.form-actions,.detail-action-buttons,.detail-actions,.approval-box>div,.creative-preview-heading,.page-heading,.calendar-toolbar,.topbar,.month-controls{flex-wrap:wrap;gap:12px}.form-actions>button,.detail-action-buttons>button,.approval-box>div>button{flex:1 1 150px;margin-left:0}.detail-action-buttons{flex:1;min-width:0}.detail-actions>.icon-btn{align-self:center}.drawer .approval-box .primary{margin-left:0}
+.modal,.modal.wide{max-width:100%;max-height:calc(100dvh - 32px)}.drawer{max-width:100%;height:100dvh}.modal-header>div,.drawer-head .client-pill{min-width:0}.modal-header .icon-btn,.drawer-head .icon-btn{flex-shrink:0}.creative-frame{max-width:100%}
+.sidebar nav button{position:relative;min-width:0}.client-links button{width:100%;min-width:0;overflow-wrap:anywhere}.profile{min-width:0}.profile>.icon-btn{flex-shrink:0}.sidebar{max-width:calc(100vw - 32px)}
+.format-count-items{min-width:0;display:flex;flex-wrap:wrap;gap:12px 20px}.format-count-item{flex:0 1 auto;white-space:normal}.format-count-item strong{flex-shrink:0}.table-panel,.calendar-panel{min-width:0;max-width:100%}.table-scroll,.calendar-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}.topbar{height:auto;min-height:57px}.topbar>div{min-width:0}.topbar>div:first-child{flex-wrap:wrap}.review-content-info,.detail-meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(min-width:980px) and (max-width:1199px){.review-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:979px){.main{margin-left:0;width:100%}.mobile-menu{display:inline-flex}.sidebar{transform:translateX(-100%)}.sidebar.opened{transform:translateX(0)}.overview-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.filters .search{grid-column:1/-1}.date-filter-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.date-filter-fields label{width:100%}.date-filter-fields>.text-btn,.date-filter-error{grid-column:1/-1}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stats>div{min-width:0}.clients-grid{grid-template-columns:1fr}.calendar-toolbar{align-items:stretch}.month-controls{width:100%;gap:4px;justify-content:center}.month-controls h2{min-width:0;flex:1;text-align:center}.today-btn{margin-left:0}.segmented{width:100%}.modal-overlay{padding:12px}.modal,.modal.wide{max-height:calc(100dvh - 24px)}.form-actions>button{flex:1 1 120px}.drawer{padding:20px 16px}.drawer .approval-box>div{display:grid;grid-template-columns:1fr}.drawer .approval-box>div>button{width:100%}.form-grid{grid-template-columns:1fr}.review-grid{grid-template-columns:1fr}.topbar{padding:10px 16px}.topbar .topbar-right{gap:6px}.page-heading>.primary{width:100%}.table-title>*{min-width:0}.table-title .secondary-btn{flex:1 1 160px}.upcoming{flex-wrap:wrap}.upcoming .post-card{min-width:0;max-width:100%}}
+@media(max-width:380px){.filters{grid-template-columns:1fr}.date-filter-fields{grid-template-columns:1fr}.detail-meta,.review-content-info{grid-template-columns:1fr}.form-actions{flex-direction:column}.form-actions>button{flex:auto;width:100%}}
+@media(pointer:coarse){button.icon-btn,.day-add{min-width:44px;min-height:44px}.primary,.secondary-btn,.filters select,.filters input,.date-filter-fields input{min-height:44px}.editor-form input,.editor-form select,.editor-form textarea,.approval-box textarea{font-size:16px}}
+
+/* Mobile totals retain the desktop dividers; date fields have a clear gutter. */
+@media(max-width:600px){
+ .stats{gap:0;padding-bottom:0;border-bottom:0}
+ .stats>div,.stats>div:first-child,.stats>div:last-child{padding:14px 12px;border:0;border-bottom:1px solid var(--line)}
+ .stats>div:nth-child(odd){padding-left:0;border-right:1px solid var(--line)}
+ .stats>div:nth-child(even){padding-left:16px}
+ .date-filter-fields{gap:20px;align-items:start;margin-top:4px}
+ .date-filter-fields label{gap:8px}
+ .date-filter-fields input{display:block;max-width:100%;box-sizing:border-box}
+}
