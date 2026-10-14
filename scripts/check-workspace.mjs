@@ -16,9 +16,11 @@ let identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
 const env={DB:db,ADMIN_EMAIL:'owner@example.com'};
 const transpile=(src)=>ts.transpileModule(src,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const moduleUrl=(src)=>'data:text/javascript;base64,'+Buffer.from(transpile(src)).toString('base64');
-const {importBackup}=await import(moduleUrl(readFileSync('worker/import-backup.ts','utf8')));
+const material=await import(moduleUrl(readFileSync('shared/material-links.ts','utf8')));
+globalThis.__blauMaterial=material;
+const {importBackup}=await import(moduleUrl(readFileSync('worker/import-backup.ts','utf8').replace("import {validateMaterial} from '../shared/material-links';",'const {validateMaterial}=globalThis.__blauMaterial;')));
 globalThis.__blauImport=importBackup;
-const {createWorkspaceApi}=await import(moduleUrl(readFileSync('worker/workspace.ts','utf8').replace("import {importBackup} from './import-backup';",'const importBackup=globalThis.__blauImport;')));
+const {createWorkspaceApi}=await import(moduleUrl(readFileSync('worker/workspace.ts','utf8').replace("import {importBackup} from './import-backup';",'const importBackup=globalThis.__blauImport;').replace("import {validateMaterial,materialLinks} from '../shared/material-links';",'const {validateMaterial,materialLinks}=globalThis.__blauMaterial;')));
 const api={GET:(req)=>createWorkspaceApi(env,identity).GET(req),POST:(req)=>createWorkspaceApi(env,identity).POST(req)};
 async function post(body,expected=200){const r=await api.POST(new Request('https://test.local/api/workspace',{method:'POST',headers:{'Content-Type':'application/json','Origin':'https://test.local'},body:JSON.stringify(body)}));assert.equal(r.status,expected,JSON.stringify(await r.clone().json()));return r.json();}
 async function get(expected=200,preview=''){const r=await api.GET(new Request('https://test.local/api/workspace'+(preview?'?preview='+preview:'')));assert.equal(r.status,expected);return r.json();}
@@ -30,6 +32,12 @@ let data=await get();const [a,b]=data.clients;
 const draft={action:'post',client_id:a.id,title:'Prueba',copy:'Copy original',channel:'Instagram',format:'Reel',date:'2026-10-20T10:00',status:'Borrador',asset:''};
 await post({...draft,status:'Aprobado'},400);
 await post({...draft,asset:'javascript:alert(1)'},400);
+const carouselAssets='https://drive.google.com/file/d/imageA/view\nhttps://drive.google.com/file/d/imageB/view';
+await post({...draft,title:'Carrusel de prueba',format:'Carrusel',asset:carouselAssets});
+assert.equal((await get()).posts.find(x=>x.title==='Carrusel de prueba').asset,carouselAssets);
+await post({...draft,asset:carouselAssets},400);
+await post({...draft,format:'Carrusel',asset:carouselAssets+'\njavascript:alert(1)'},400);
+await post({...draft,format:'Carrusel',asset:Array(21).fill('https://example.com/image.png').join('\n')},400);
 await post(draft);
 await post({...draft,client_id:b.id,title:'Otro cliente',status:'En revisión'});
 let p=(await get()).posts.find(x=>x.client_id===a.id);

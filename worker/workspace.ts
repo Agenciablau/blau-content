@@ -1,5 +1,6 @@
 import type {Env,User} from './types';
 import {importBackup} from './import-backup';
+import {validateMaterial,materialLinks} from '../shared/material-links';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
 const channels=['Instagram','LinkedIn','Email','Blog / web','TikTok','Facebook'];
@@ -102,12 +103,12 @@ async function POST(req:Request){
    await c.db.batch([c.db.prepare('DELETE FROM reviews WHERE post_id=?').bind(existing.id),c.db.prepare('DELETE FROM comments WHERE post_id=?').bind(existing.id),c.db.prepare('DELETE FROM posts WHERE id=?').bind(existing.id)]);
   }else{
    if(!staff)return fail('Solo el equipo puede editar contenidos.',403);
-   const title=str(b.title,160),copy=str(b.copy,15000),asset=str(b.asset,2000),date=str(b.date,16);
+   const title=str(b.title,160),copy=str(b.copy,15000),asset=materialLinks(str(b.asset,42000)).join('\n'),date=str(b.date,16);
    if(!title||!channels.includes(b.channel)||!formats.includes(b.format)||!statuses.includes(b.status)||(date?(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))):!['Idea','Borrador'].includes(b.status)))return fail('Revisa título, fecha, canal y formato.');
    if(date&&new Date(date+'Z').toISOString().slice(0,16)!==date)return fail('La fecha no existe. Revisa el día y la hora.');
    if(!allowedFormats[b.channel]?.includes(b.format))return fail('El formato no corresponde a esta plataforma.');
    if(existing?.status==='Publicado')return fail('Las publicaciones publicadas se conservan. Crea una nueva versión para modificarlas.');
-   if(asset){try{const u=new URL(asset);if(!['http:','https:'].includes(u.protocol))return fail('El enlace debe comenzar por https:// o http://.');}catch{return fail('Introduce un enlace válido.');}}
+   if(typeof b.asset==='string'&&b.asset.length>42000)return fail('Los enlaces de material son demasiado largos.');const materialError=validateMaterial(asset,b.format);if(materialError)return fail(materialError);
    if(!await c.db.prepare('SELECT id FROM clients WHERE id=? AND archived=0').bind(str(b.client_id)).first())return fail('Selecciona un cliente activo.');
    if(existing&&existing.client_id!==b.client_id)return fail('El cliente de una publicación no se puede cambiar.');
    const changed=existing&&['title','copy','channel','format','date','asset'].some(k=>existing[k]!==({title,copy,date,asset,channel:b.channel,format:b.format} as any)[k]);
