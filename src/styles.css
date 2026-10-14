@@ -76,3 +76,5 @@ button:disabled{cursor:not-allowed}input,select,textarea{border-color:#dce0e5;bo
 
 /* Supplied Blau Content logo: original proportions and colors. */
 .brand-logo{display:block;width:148px;height:auto;max-width:100%;object-fit:contain}.sidebar>.brand{justify-content:flex-start;flex-shrink:0}.loading-logo{display:block;width:128px;height:auto;max-width:60vw;object-fit:contain}.welcome-nav .brand-logo{width:148px}@media(max-width:600px){.brand-logo,.welcome-nav .brand-logo{width:136px}.loading-logo{width:116px}}
+
+.creative-preview{margin:24px 0;border-top:1px solid var(--line);padding-top:20px}.creative-preview-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}.creative-preview-heading h2{font-size:16px;font-weight:600}.creative-frame{display:block;width:100%;height:360px;border:1px solid var(--line);border-radius:8px;background:#f5f6f8}.creative-frame.portrait{height:480px}.creative-preview-note{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6}@media(max-width:600px){.creative-frame{height:300px}.creative-frame.portrait{height:420px}}
