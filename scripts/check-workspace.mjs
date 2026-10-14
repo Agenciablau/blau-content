@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const sql=new DatabaseSync(':memory:');
-for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
+for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{
  constructor(q,args=[]){this.q=q;this.args=args;}
  bind(...args){return new Statement(this.q,args);}
@@ -18,9 +18,11 @@ const transpile=(src)=>ts.transpileModule(src,{compilerOptions:{target:ts.Script
 const moduleUrl=(src)=>'data:text/javascript;base64,'+Buffer.from(transpile(src)).toString('base64');
 const material=await import(moduleUrl(readFileSync('shared/material-links.ts','utf8')));
 globalThis.__blauMaterial=material;
-const {importBackup}=await import(moduleUrl(readFileSync('worker/import-backup.ts','utf8').replace("import {validateMaterial} from '../shared/material-links';",'const {validateMaterial}=globalThis.__blauMaterial;')));
+const profiles=await import(moduleUrl(readFileSync('shared/client-profile.ts','utf8')));
+globalThis.__blauProfiles=profiles;
+const {importBackup}=await import(moduleUrl(readFileSync('worker/import-backup.ts','utf8').replace("import {normalizeClientProfile} from '../shared/client-profile';",'const {normalizeClientProfile}=globalThis.__blauProfiles;').replace("import {validateMaterial} from '../shared/material-links';",'const {validateMaterial}=globalThis.__blauMaterial;')));
 globalThis.__blauImport=importBackup;
-const {createWorkspaceApi}=await import(moduleUrl(readFileSync('worker/workspace.ts','utf8').replace("import {importBackup} from './import-backup';",'const importBackup=globalThis.__blauImport;').replace("import {validateMaterial,materialLinks} from '../shared/material-links';",'const {validateMaterial,materialLinks}=globalThis.__blauMaterial;')));
+const {createWorkspaceApi}=await import(moduleUrl(readFileSync('worker/workspace.ts','utf8').replace("import {normalizeClientProfile} from '../shared/client-profile';",'const {normalizeClientProfile}=globalThis.__blauProfiles;').replace("import {importBackup} from './import-backup';",'const importBackup=globalThis.__blauImport;').replace("import {validateMaterial,materialLinks} from '../shared/material-links';",'const {validateMaterial,materialLinks}=globalThis.__blauMaterial;')));
 const api={GET:(req)=>createWorkspaceApi(env,identity).GET(req),POST:(req)=>createWorkspaceApi(env,identity).POST(req)};
 async function post(body,expected=200){const r=await api.POST(new Request('https://test.local/api/workspace',{method:'POST',headers:{'Content-Type':'application/json','Origin':'https://test.local'},body:JSON.stringify(body)}));assert.equal(r.status,expected,JSON.stringify(await r.clone().json()));return r.json();}
 async function get(expected=200,preview=''){const r=await api.GET(new Request('https://test.local/api/workspace'+(preview?'?preview='+preview:'')));assert.equal(r.status,expected);return r.json();}
@@ -29,6 +31,14 @@ await post({action:'init'});
 await post({action:'client',name:'Cliente A',color:'#8b7ae8'});
 await post({action:'client',name:'Cliente B',color:'#3b9785'});
 let data=await get();const [a,b]=data.clients;
+const profile={website:'https://example.com/',contact_name:'Contacto de ejemplo',contact_email:'contact@example.com',phone:'+34 600 000 000',address:'Dirección de prueba',socials:{instagram:'https://www.instagram.com/example/'}};
+await post({action:'client',...a,profile});
+assert.equal(JSON.parse((await get()).clients.find(c=>c.id===a.id).profile).contact_email,profile.contact_email);
+await post({action:'client',...a,profile:{website:'javascript:alert(1)'}},400);
+await post({action:'client',...a,profile:{contact_email:'invalid'}},400);
+await post({action:'client',id:a.id,name:a.name,color:a.color,notes:a.notes});
+assert.equal(JSON.parse((await get()).clients.find(c=>c.id===a.id).profile).website,profile.website);
+
 const draft={action:'post',client_id:a.id,title:'Prueba',copy:'Copy original',channel:'Instagram',format:'Reel',date:'2026-10-20T10:00',status:'Borrador',asset:''};
 await post({...draft,status:'Aprobado'},400);
 await post({...draft,asset:'javascript:alert(1)'},400);
@@ -116,3 +126,47 @@ await post({action:'removeMember',email:'new-client@example.com'});
 identity={userId:'new-client',email:'new-client@example.com',displayName:'New client'};
 await get(403);await post({action:'comment',id:published.id,body:'Access revoked'},403);
 console.log('Passed: app-only onboarding, unregistered verified identities, scoped client access and immediate API revocation.');
+
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+assert.equal(JSON.parse((await get()).clients.find(c=>c.id===a.id).profile).website,profile.website,'Profile survives backup import');
+await post({action:'member',email:'profile-team@example.com',role:'team'});
+await post({action:'member',email:'profile-client@example.com',role:'client',client_id:a.id});
+identity={userId:'profile-team',email:'profile-team@example.com',displayName:'Team'};
+const teamProfiles=await get();assert.ok(teamProfiles.members.some(m=>m.email==='profile-client@example.com'&&m.client_id===a.id));assert.ok(teamProfiles.members.every(m=>m.role==='client'));
+await post({action:'member',email:'forbidden@example.com',role:'client',client_id:a.id},403);
+identity={userId:'profile-client',email:'profile-client@example.com',displayName:'Client'};
+const clientProfiles=await get();assert.equal(clientProfiles.clients.length,1);assert.equal(clientProfiles.clients[0].id,a.id);assert.equal(clientProfiles.members.length,0);
+assert.equal(profiles.readClientProfile({website:'htt',contact_email:'person@'}).website,'htt','Editing preserves unfinished values');
+assert.equal(profiles.normalizeClientProfile(undefined).website,'','Old backups accept missing profiles');
+console.log('Passed: client profiles, URL/email validation, backup persistence and scoped user visibility.');
+
+// Deleting a client requires its exact name and removes its complete scoped graph.
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+await post({action:'client',name:'Cliente a eliminar',color:'#13dbfb',profile});
+const doomed=(await get()).clients.find(c=>c.name==='Cliente a eliminar');
+await post({...draft,client_id:doomed.id,title:'Publicación eliminable',status:'En revisión'});
+const doomedPost=(await get()).posts.find(p=>p.client_id===doomed.id);
+await post({action:'comment',id:doomedPost.id,body:'Comentario del cliente'});
+await post({action:'review',id:doomedPost.id,updated_at:doomedPost.updated_at,status:'Aprobado',body:'Aprobación de prueba'});
+const approvedDoomed=(await get()).posts.find(p=>p.id===doomedPost.id);
+await post({...approvedDoomed,action:'post',status:'Publicado'});
+await post({action:'member',email:'doomed@example.com',role:'client',client_id:doomed.id});
+identity={userId:'profile-team',email:'profile-team@example.com',displayName:'Team'};
+await post({action:'deleteClient',id:doomed.id,confirmName:doomed.name},403);
+identity={userId:'doomed',email:'doomed@example.com',displayName:'Client'};
+await post({action:'deleteClient',id:doomed.id,confirmName:doomed.name},403);
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+await post({action:'deleteClient',id:doomed.id,confirmName:doomed.name.toLowerCase()},400);
+assert.ok((await get()).posts.some(p=>p.id===doomedPost.id),'Wrong confirmation must not delete anything');
+const originalBatch=db.batch;
+db.batch=async statements=>{sql.prepare('UPDATE clients SET name=? WHERE id=?').run(doomed.name+' renombrado',doomed.id);return originalBatch.call(db,statements);};
+await post({action:'deleteClient',id:doomed.id,confirmName:doomed.name},409);
+db.batch=originalBatch;doomed.name+=' renombrado';
+const afterRename=await get();assert.ok(afterRename.posts.some(p=>p.id===doomedPost.id));assert.ok(afterRename.comments.some(c=>c.post_id===doomedPost.id));assert.ok(afterRename.reviews.some(r=>r.post_id===doomedPost.id));assert.ok(afterRename.members.some(m=>m.client_id===doomed.id));
+const beforeDelete=await get();
+await post({action:'deleteClient',id:doomed.id,confirmName:doomed.name});
+const afterDelete=await get();
+assert.ok(!afterDelete.clients.some(c=>c.id===doomed.id));assert.ok(!afterDelete.posts.some(p=>p.client_id===doomed.id));assert.ok(!afterDelete.comments.some(c=>c.post_id===doomedPost.id));assert.ok(!afterDelete.reviews.some(r=>r.post_id===doomedPost.id));assert.ok(!afterDelete.members.some(m=>m.client_id===doomed.id));
+assert.deepEqual(afterDelete.clients,beforeDelete.clients.filter(c=>c.id!==doomed.id));assert.deepEqual(afterDelete.posts,beforeDelete.posts.filter(p=>p.client_id!==doomed.id));
+identity={userId:'doomed',email:'doomed@example.com',displayName:'Client'};await get(403);
+console.log('Passed: exact client-name confirmation, administrator-only deletion, dependent records, published posts, other-client preservation and access revocation.');

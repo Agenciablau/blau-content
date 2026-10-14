@@ -1,6 +1,7 @@
 import type {Env,User} from './types';
 import {importBackup} from './import-backup';
 import {validateMaterial,materialLinks} from '../shared/material-links';
+import {normalizeClientProfile} from '../shared/client-profile';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
 const channels=['Instagram','LinkedIn','Email','Blog / web','TikTok','Facebook'];
@@ -36,7 +37,7 @@ async function GET(req?:Request){
  const scope=client?" WHERE post_id IN (SELECT id FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador'))":'';
  const co=await c.db.prepare('SELECT * FROM comments'+scope+' ORDER BY created_at').bind(...(client?[c.clientId]:[])).all();
  const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+scope+' ORDER BY created_at DESC').bind(...(client?[c.clientId]:[])).all();
- const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():{results:[]};
+ const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id FROM members WHERE role='client' ORDER BY email").all():{results:[]};
  return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,clients:cl.results,posts:p.results,comments:co.results,members:m.results,reviews:history.results},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
@@ -65,11 +66,27 @@ async function POST(req:Request){
  if(b.action==='import'){
   if(c.role!=='owner')return fail('Solo el administrador puede importar.',403);
   try{await importBackup(c.db,b.backup,c.user);}catch(e){return fail(e instanceof Error?e.message:'No se pudo importar.');}
+ }else if(b.action==='deleteClient'){
+  if(c.role!=='owner')return fail('Solo el administrador puede eliminar clientes.',403);
+  const id=str(b.id),current=await c.db.prepare('SELECT id,name FROM clients WHERE id=?').bind(id).first<{id:string;name:string}>();
+  if(!current)return fail('Cliente no encontrado.',404);
+  if(typeof b.confirmName!=='string'||b.confirmName!==current.name)return fail('Escribe el nombre exacto del cliente para autorizar la eliminación.');
+  // Every deletion checks the current name inside the same atomic batch, protecting against a concurrent rename.
+  const guard='EXISTS (SELECT 1 FROM clients WHERE id=? AND name=?)';
+  const results=await c.db.batch([
+   c.db.prepare(`DELETE FROM reviews WHERE post_id IN (SELECT id FROM posts WHERE client_id=?) AND ${guard}`).bind(id,id,current.name),
+   c.db.prepare(`DELETE FROM comments WHERE post_id IN (SELECT id FROM posts WHERE client_id=?) AND ${guard}`).bind(id,id,current.name),
+   c.db.prepare(`DELETE FROM posts WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
+   c.db.prepare(`DELETE FROM members WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
+   c.db.prepare('DELETE FROM clients WHERE id=? AND name=?').bind(id,current.name)
+  ]);
+  if(!results[4].meta.changes)return fail('El cliente ha cambiado. Vuelve a abrir su ficha antes de eliminarlo.',409);
  }else if(b.action==='client'){
   if(!staff)return fail('Solo el equipo puede gestionar clientes.',403);
   const name=str(b.name,100),color=str(b.color,7);if(!name||!/^#[0-9a-f]{6}$/i.test(color))return fail('Introduce nombre y color válidos.');
-  if(b.id){await c.db.prepare('UPDATE clients SET name=?,color=?,notes=?,archived=? WHERE id=?').bind(name,color,str(b.notes),b.archived?1:0,str(b.id)).run();}
-  else await c.db.prepare('INSERT INTO clients(id,name,color,notes) VALUES(?,?,?,?)').bind(crypto.randomUUID(),name,color,str(b.notes)).run();
+  let profile:string;try{const current=b.id?await c.db.prepare('SELECT profile FROM clients WHERE id=?').bind(str(b.id)).first<{profile:string}>():null;if(b.id&&!current)return fail('Cliente no encontrado.',404);profile=JSON.stringify(normalizeClientProfile(b.profile===undefined?current?.profile:b.profile));}catch(e){return fail(e instanceof Error?e.message:'Datos del cliente no válidos.');}
+  if(b.id){await c.db.prepare('UPDATE clients SET name=?,color=?,notes=?,archived=?,profile=? WHERE id=?').bind(name,color,str(b.notes),b.archived?1:0,profile,str(b.id)).run();}
+  else await c.db.prepare('INSERT INTO clients(id,name,color,notes,profile) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),name,color,str(b.notes),profile).run();
  }else if(b.action==='member'){
   if(c.role!=='owner')return fail('Solo el administrador puede gestionar accesos.',403);
   const email=str(b.email,254).toLowerCase(),role=b.role;
