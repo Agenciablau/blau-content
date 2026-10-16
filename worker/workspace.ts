@@ -128,10 +128,10 @@ async function POST(req:Request){
   }else if(b.action==='delete'){
    const buffer=await c.db.prepare('SELECT state FROM buffer_jobs WHERE post_id=?').bind(existing.id).first<{state:string}>();if(buffer&&lockedBufferStates.includes(buffer.state))return fail('Cancela o resuelve el envío en Buffer antes de eliminar esta publicación.',409);
    if(!staff)return fail('Sin permiso.',403);
-   if(existing.status==='Publicado')return fail('Conserva el registro publicado. Puedes crear una nueva versión.');
    const guard=`EXISTS (SELECT 1 FROM posts WHERE id=? AND updated_at=? AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')})))`;
-   const deleted=await c.db.batch(['reviews','comments','buffer_jobs','posts'].map(table=>c.db.prepare(`DELETE FROM ${table} WHERE ${table==='posts'?'id':'post_id'}=? AND ${guard}`).bind(existing.id,existing.id,existing.updated_at)));
-   if(!deleted[3].meta.changes)return fail('La publicación ha cambiado o tiene un envío activo. Actualiza antes de eliminarla.',409);
+   const cleanupId=crypto.randomUUID();
+   const deleted=await c.db.batch([c.db.prepare(`INSERT INTO media_cleanup(id,object_keys,created_at) SELECT ?,(SELECT json_group_array(json_extract(value,'$.key')) FROM json_each(buffer_jobs.assets)),? FROM buffer_jobs WHERE post_id=? AND assets<>'[]' AND ${guard}`).bind(cleanupId,new Date().toISOString(),existing.id,existing.id,existing.updated_at),...['reviews','comments','buffer_jobs','posts'].map(table=>c.db.prepare(`DELETE FROM ${table} WHERE ${table==='posts'?'id':'post_id'}=? AND ${guard}`).bind(existing.id,existing.id,existing.updated_at))]);
+   if(!deleted[4].meta.changes)return fail('La publicación ha cambiado o tiene un envío activo. Actualiza antes de eliminarla.',409);
   }else{
    if(!staff)return fail('Solo el equipo puede editar contenidos.',403);
    const title=str(b.title,160),copy=str(b.copy,15000),asset=materialLinks(str(b.asset,42000)).join('\n'),date=str(b.date,16);

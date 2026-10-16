@@ -79,5 +79,11 @@ await addPost('race-delete');const baseBatch=db.batch;db.batch=async statements=
 const raceDelete=await ownerApi.POST(new Request('https://test.local/api/workspace',{method:'POST',headers:{Origin:'https://test.local','Content-Type':'application/json'},body:JSON.stringify({action:'delete',id:'race-delete'})}));assert.equal(raceDelete.status,409);db.batch=baseBatch;assert.ok(await db.prepare('SELECT id FROM posts WHERE id=?').bind('race-delete').first());await db.prepare('DELETE FROM buffer_jobs WHERE post_id=?').bind('race-delete').run();
 await api({action:'cancel',post_id:'p3'});
 await reviewPost('p7');await processStoryQueue(env);const job7=await db.prepare('SELECT * FROM buffer_jobs WHERE post_id=?').bind('p7').first();remote.get(job7.remote_id).status='sent';await api({action:'sync',post_id:'p7'});assert.ok(objects.size>0);
+await workspaceAction(clientIdentity,{action:'delete',id:'p7'},403);
+await workspaceAction(user,{action:'delete',id:'p7'});
+assert.equal(await db.prepare("SELECT id FROM posts WHERE id='p7'").first(),null);
+assert.equal(await db.prepare("SELECT post_id FROM buffer_jobs WHERE post_id='p7'").first(),null);
+assert.ok((await db.prepare('SELECT COUNT(*) AS n FROM media_cleanup').first()).n>0);
+await api({action:'cleanup'});
 const removeClient=await ownerApi.POST(new Request('https://test.local/api/workspace',{method:'POST',headers:{Origin:'https://test.local','Content-Type':'application/json'},body:JSON.stringify({action:'deleteClient',id:'a',confirmName:'Cliente A'})}));assert.equal(removeClient.status,200,JSON.stringify(await removeClient.clone().json()));assert.equal(objects.size,0);assert.ok(await db.prepare("SELECT id FROM clients WHERE id='b'").first());assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM buffer_jobs').first()).count,0);
 console.log('Passed: OAuth state and encryption, channel isolation, server permissions, Madrid DST, approved-only sending, concurrent duplicate protection, streaming copies, cancellation, uncertain-send reconciliation, automatic client approval for stories only, preview exclusion, durable queue, approval preserved on failure and safe cleanup.');

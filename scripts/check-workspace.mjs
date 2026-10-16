@@ -90,7 +90,7 @@ assert.equal((await get()).reviews[0].role,'team','Preview decisions must not be
 await post({...approved,action:'post',status:'Publicado'});
 let published=(await get()).posts.find(x=>x.id===approved.id);
 await post({...published,action:'post',copy:'Overwrite published'},400);
-await post({action:'delete',id:published.id},400);
+
 await post({...draft,title:'Idea sin fecha',status:'Idea',date:''});
 await post({...draft,title:'Wrong format',channel:'Email',format:'Reel'},400);
 await post({...draft,title:'Missing review date',status:'En revisión',date:''},400);
@@ -99,6 +99,8 @@ assert.equal((await get()).clients.find(x=>x.id===a.id).archived,1);
 await post({...draft,title:'Archived client'},400);
 const exportResponse=await api.GET(new Request('https://test.local/api/workspace?export=1'));
 assert.equal(exportResponse.status,200);assert.ok((await exportResponse.json()).reviews.length);
+await post({action:'delete',id:published.id});
+assert.ok(!(await get()).posts.some(p=>p.id===published.id));
 identity={userId:'client',email:'client@example.com',displayName:'Cliente'};
 assert.equal((await api.GET(new Request('https://test.local/api/workspace?export=1'))).status,403);
 assert.ok((await get()).reviews.every(x=>x.post_id!==published.id));
