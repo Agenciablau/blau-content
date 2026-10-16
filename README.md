@@ -128,3 +128,7 @@ Stories accept one JPG, PNG or MP4 Drive file. Reels and carousels keep their ex
 ### Comment inbox
 
 The Comentarios tab uses the approvals card grid and existing date/client/platform/format filters. Each new comment stores its authenticated author role; the latest unresolved message assigns the conversation to the other side (client ↔ team). Approval resolves prior comments atomically, while later messages reopen the inbox. Administrator preview messages are stored as team messages. Existing comments have unknown author roles and remain available in conversations, but do not generate potentially incorrect inbox assignments. New backup exports preserve roles and resolution; old backups retain their historical messages without assigning them to an inbox. Deployment applies migration 0004_comment_inbox.sql.
+
+### Monthly content commitments
+
+Owners can set recurring monthly goals in each client profile for Instagram feed (reels, carousels, images), Instagram stories, Email and LinkedIn. Blank means no agreement; zero is an explicit zero goal. The administrator progress bar counts only Publicado posts by their stored publication date in the selected month, independent of content search/status/platform filters. Client selection applies; aggregate remaining quantities are summed per client so one client cannot offset another. Editing a goal changes the recurring target shown for every month; agreement history is not versioned. Goals use the existing profile JSON column and backup flow; no migration is required.

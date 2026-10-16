@@ -94,7 +94,7 @@ async function POST(req:Request){
  }else if(b.action==='client'){
   if(!staff)return fail('Solo el equipo puede gestionar clientes.',403);
   const name=str(b.name,100),color=str(b.color,7);if(!name||!/^#[0-9a-f]{6}$/i.test(color))return fail('Introduce nombre y color válidos.');
-  let profile:string;try{const current=b.id?await c.db.prepare('SELECT profile FROM clients WHERE id=?').bind(str(b.id)).first<{profile:string}>():null;if(b.id&&!current)return fail('Cliente no encontrado.',404);profile=JSON.stringify(normalizeClientProfile(b.profile===undefined?current?.profile:b.profile));}catch(e){return fail(e instanceof Error?e.message:'Datos del cliente no válidos.');}
+  let profile:string;try{const current=b.id?await c.db.prepare('SELECT profile FROM clients WHERE id=?').bind(str(b.id)).first<{profile:string}>():null;if(b.id&&!current)return fail('Cliente no encontrado.',404);profile=JSON.stringify(normalizeClientProfile(b.profile===undefined?current?.profile:b.profile));if(c.role!=='owner'&&JSON.stringify(normalizeClientProfile(profile).monthly_goals)!==JSON.stringify(normalizeClientProfile(current?.profile).monthly_goals))return fail('Solo el administrador puede cambiar el compromiso mensual.',403);}catch(e){return fail(e instanceof Error?e.message:'Datos del cliente no válidos.');}
   if(b.id){await c.db.prepare('UPDATE clients SET name=?,color=?,notes=?,archived=?,profile=? WHERE id=?').bind(name,color,str(b.notes),b.archived?1:0,profile,str(b.id)).run();}
   else await c.db.prepare('INSERT INTO clients(id,name,color,notes,profile) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),name,color,str(b.notes),profile).run();
  }else if(b.action==='member'){
