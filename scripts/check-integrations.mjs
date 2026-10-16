@@ -11,7 +11,13 @@ assert.equal(normalizeClientProfile({monthly_goals:{feed:10}}).monthly_goals.fee
 for(const bad of [-1,1.5,10001,'10'])assert.throws(()=>normalizeClientProfile({monthly_goals:{feed:bad}}));
 const goalClients=[{id:'a',goals:{feed:2,stories:1,email:null,linkedin:0}},{id:'b',goals:{feed:2,stories:null,email:1,linkedin:null}}];
 const goalPosts=[...Array.from({length:3},()=>({client_id:'a',channel:'Instagram',format:'Reel',date:'2030-07-15T10:00',status:'Publicado'})),{client_id:'a',channel:'Instagram',format:'Historia',date:'2030-07-15T10:00',status:'Planificado'},{client_id:'b',channel:'Email',format:'Newsletter',date:'2030-06-15T10:00',status:'Publicado'},{client_id:'b',channel:'LinkedIn',format:'Imagen',date:'2030-07-15T10:00',status:'Publicado'}];
-const goalProgress=monthlyCommitmentProgress(goalClients,goalPosts,'2030-07');assert.equal(goalProgress[0].published,3);assert.equal(goalProgress[0].target,4);assert.equal(goalProgress[0].remaining,2);assert.equal(goalProgress[1].remaining,1);assert.equal(goalProgress[2].remaining,1);assert.equal(goalProgress[3].remaining,0);
+const goalProgress=monthlyCommitmentProgress(goalClients,goalPosts,'2030-07');assert.equal(goalProgress[0].planned,3);assert.equal(goalProgress[0].target,4);assert.equal(goalProgress[0].remaining,2);assert.equal(goalProgress[1].remaining,0);assert.equal(goalProgress[2].remaining,1);assert.equal(goalProgress[3].remaining,0);
+for(const status of ['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado']){
+ const scheduled={client_id:'a',channel:'Instagram',format:'Reel',date:'2030-07-15T10:00',status};
+ assert.equal(monthlyCommitmentProgress(goalClients,[scheduled],'2030-07')[0].planned,1);
+ assert.equal(monthlyCommitmentProgress(goalClients,[{...scheduled,date:''}],'2030-07')[0].planned,0);
+ assert.equal(monthlyCommitmentProgress(goalClients,[{...scheduled,date:'2030-08-01T10:00'}],'2030-07')[0].planned,0);
+}
 const sql=new DatabaseSync(':memory:');for(const migration of readdirSync('migrations').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{constructor(query,args=[]){this.query=query;this.args=args;}bind(...args){return new Statement(this.query,args);}async first(){return sql.prepare(this.query).get(...this.args)??null;}async all(){return {results:sql.prepare(this.query).all(...this.args)};}async run(){const r=sql.prepare(this.query).run(...this.args);return {meta:{changes:Number(r.changes)}};}}
 const db={prepare:q=>new Statement(q),async batch(statements){sql.exec('BEGIN');try{const out=[];for(const s of statements)out.push(await s.run());sql.exec('COMMIT');return out;}catch(e){sql.exec('ROLLBACK');throw e;}}};
