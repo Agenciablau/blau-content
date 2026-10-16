@@ -79,6 +79,8 @@ await addPost('race-delete');const baseBatch=db.batch;db.batch=async statements=
 const raceDelete=await ownerApi.POST(new Request('https://test.local/api/workspace',{method:'POST',headers:{Origin:'https://test.local','Content-Type':'application/json'},body:JSON.stringify({action:'delete',id:'race-delete'})}));assert.equal(raceDelete.status,409);db.batch=baseBatch;assert.ok(await db.prepare('SELECT id FROM posts WHERE id=?').bind('race-delete').first());await db.prepare('DELETE FROM buffer_jobs WHERE post_id=?').bind('race-delete').run();
 await api({action:'cancel',post_id:'p3'});
 await reviewPost('p7');await processStoryQueue(env);const job7=await db.prepare('SELECT * FROM buffer_jobs WHERE post_id=?').bind('p7').first();remote.get(job7.remote_id).status='sent';await api({action:'sync',post_id:'p7'});assert.ok(objects.size>0);
+// Deletion must consult Buffer even if the browser/local state is stale or unknown.
+await db.prepare("UPDATE buffer_jobs SET state='unknown' WHERE post_id='p7'").run();
 await workspaceAction(clientIdentity,{action:'delete',id:'p7'},403);
 await workspaceAction(user,{action:'delete',id:'p7'});
 assert.equal(await db.prepare("SELECT id FROM posts WHERE id='p7'").first(),null);

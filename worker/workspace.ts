@@ -1,8 +1,9 @@
+import {bufferQuery,remotePostFields} from './buffer-api';
 import type {Env,User} from './types';
 import {importBackup} from './import-backup';
 import {validateMaterial,materialLinks} from '../shared/material-links';
 import {normalizeClientProfile} from '../shared/client-profile';
-import {lockedBufferStates} from '../shared/buffer-scheduling';
+import {lockedBufferStates,bufferState} from '../shared/buffer-scheduling';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
 const channels=['Instagram','LinkedIn','Email','Blog / web','TikTok','Facebook'];
@@ -126,8 +127,20 @@ async function POST(req:Request){
    const results=await c.db.batch(operations);
    if(!results[0].meta.changes)return fail('La publicación ha cambiado. Actualiza antes de aprobar.',409);
   }else if(b.action==='delete'){
-   const buffer=await c.db.prepare('SELECT state FROM buffer_jobs WHERE post_id=?').bind(existing.id).first<{state:string}>();if(buffer&&lockedBufferStates.includes(buffer.state))return fail('Cancela o resuelve el envío en Buffer antes de eliminar esta publicación.',409);
    if(!staff)return fail('Sin permiso.',403);
+   let buffer=await c.db.prepare('SELECT state,remote_id,mode FROM buffer_jobs WHERE post_id=?').bind(existing.id).first<{state:string;remote_id:string|null;mode:string}>();
+   if(buffer&&lockedBufferStates.includes(buffer.state)&&buffer.remote_id){
+    try{
+     const remote=await bufferQuery(env,'query($input:PostInput!){post(input:$input){'+remotePostFields+'}}',{input:{id:buffer.remote_id}});
+     if(!remote.post)return fail('Buffer no encuentra este envío. Revisa su estado en Integraciones antes de eliminarlo.',409);
+     const state=bufferState({...remote.post,schedulingType:remote.post.schedulingType??buffer.mode});
+     if(state==='sent'){
+      await c.db.prepare("UPDATE buffer_jobs SET state='sent',error='',updated_at=?,completed_at=? WHERE post_id=? AND remote_id=?").bind(new Date().toISOString(),new Date().toISOString(),existing.id,buffer.remote_id).run();
+      buffer={...buffer,state};
+     }
+    }catch{return fail('No se pudo comprobar el envío en Buffer. Inténtalo de nuevo antes de eliminarlo.',409);}
+   }
+   if(buffer&&lockedBufferStates.includes(buffer.state))return fail('Buffer aún no confirma la publicación. Cancela o resuelve el envío antes de eliminarla.',409);
    const guard=`EXISTS (SELECT 1 FROM posts WHERE id=? AND updated_at=? AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')})))`;
    const cleanupId=crypto.randomUUID();
    const deleted=await c.db.batch([c.db.prepare(`INSERT INTO media_cleanup(id,object_keys,created_at) SELECT ?,(SELECT json_group_array(json_extract(value,'$.key')) FROM json_each(buffer_jobs.assets)),? FROM buffer_jobs WHERE post_id=? AND assets<>'[]' AND ${guard}`).bind(cleanupId,new Date().toISOString(),existing.id,existing.id,existing.updated_at),...['reviews','comments','buffer_jobs','posts'].map(table=>c.db.prepare(`DELETE FROM ${table} WHERE ${table==='posts'?'id':'post_id'}=? AND ${guard}`).bind(existing.id,existing.id,existing.updated_at))]);
