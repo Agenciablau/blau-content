@@ -52,6 +52,31 @@ await post({...draft,format:'Carrusel',asset:Array(21).fill('https://example.com
 await post(draft);
 await post({...draft,client_id:b.id,title:'Otro cliente',status:'En revisión'});
 let p=(await get()).posts.find(x=>x.client_id===a.id);
+
+// A collaborator is an editor scoped to one brand, including drafts.
+await post({action:'member',email:'collab@example.com',role:'collaborator'},400);
+await post({action:'member',email:'collab@example.com',role:'collaborator',client_id:a.id});
+identity={userId:'collab',email:'collab@example.com',displayName:'Colaborador'};
+const scoped=await get();assert.equal(scoped.clients.length,1);assert.equal(scoped.clients[0].id,a.id);assert(scoped.posts.every(x=>x.client_id===a.id));assert(scoped.posts.some(x=>x.status==='Borrador'));assert.equal(scoped.members.length,0);
+const foreign=sql.prepare('SELECT * FROM posts WHERE client_id=?').get(b.id);
+for(const action of ['post','review','comment','delete'])await post({...foreign,action,body:'Forbidden',status:'Aprobado'},403);
+await post({...draft,client_id:b.id},403);
+await post({action:'review',id:p.id,updated_at:p.updated_at,status:'Aprobado'},403);
+await post({action:'delete',id:p.id},403);
+await post({action:'client',name:'Forbidden',color:'#111111'},403);
+await post({action:'member',email:'escape@example.com',role:'team'},403);
+await get(403,a.id);
+const exported=await api.GET(new Request('https://test.local/api/workspace?export=1'));assert.equal(exported.status,403);
+await post({...p,action:'post',copy:'Colaborador editó este borrador'});
+p=(await get()).posts.find(x=>x.id===p.id);assert.equal(p.copy,'Colaborador editó este borrador');
+await post({action:'comment',id:p.id,body:'Comentario de colaborador'});
+assert.equal((await get()).comments.find(x=>x.post_id===p.id).role,'team');
+// Restore the fixture so existing client visibility tests remain unchanged.
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+await post({...p,action:'post',copy:'Copy original'});
+p=(await get()).posts.find(x=>x.id===p.id);
+sql.prepare('DELETE FROM comments WHERE post_id=?').run(p.id);
+
 await post({action:'member',email:'client@example.com',role:'client',client_id:a.id});
 identity={userId:'client',email:'client@example.com',displayName:'Cliente'};
 assert.equal((await get()).posts.length,0,'Client must not see drafts or another brand');
@@ -135,7 +160,7 @@ assert.equal(JSON.parse((await get()).clients.find(c=>c.id===a.id).profile).webs
 await post({action:'member',email:'profile-team@example.com',role:'team'});
 await post({action:'member',email:'profile-client@example.com',role:'client',client_id:a.id});
 identity={userId:'profile-team',email:'profile-team@example.com',displayName:'Team'};
-const teamProfiles=await get();assert.ok(teamProfiles.members.some(m=>m.email==='profile-client@example.com'&&m.client_id===a.id));assert.ok(teamProfiles.members.every(m=>m.role==='client'));
+const teamProfiles=await get();assert.ok(teamProfiles.members.some(m=>m.email==='profile-client@example.com'&&m.client_id===a.id));assert.ok(teamProfiles.members.every(m=>['client','collaborator'].includes(m.role)));
 await post({action:'member',email:'forbidden@example.com',role:'client',client_id:a.id},403);
 identity={userId:'profile-client',email:'profile-client@example.com',displayName:'Client'};
 const clientProfiles=await get();assert.equal(clientProfiles.clients.length,1);assert.equal(clientProfiles.clients[0].id,a.id);assert.equal(clientProfiles.members.length,0);
@@ -173,3 +198,5 @@ assert.ok(!afterDelete.clients.some(c=>c.id===doomed.id));assert.ok(!afterDelete
 assert.deepEqual(afterDelete.clients,beforeDelete.clients.filter(c=>c.id!==doomed.id));assert.deepEqual(afterDelete.posts,beforeDelete.posts.filter(p=>p.client_id!==doomed.id));
 identity={userId:'doomed',email:'doomed@example.com',displayName:'Client'};await get(403);
 console.log('Passed: exact client-name confirmation, administrator-only deletion, dependent records, published posts, other-client preservation and access revocation.');
+
+console.log('Passed: collaborator brand isolation, draft editing, team-side comments, forbidden approval/deletion, access management and export.');
