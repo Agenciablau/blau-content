@@ -1,0 +1,1 @@
+ALTER TABLE posts ADD COLUMN client_changed_at TEXT NOT NULL DEFAULT '';

@@ -38,8 +38,10 @@ async function GET(req?:Request){
  const cl=await c.db.prepare(scoped?'SELECT * FROM clients WHERE id=?':'SELECT * FROM clients ORDER BY name').bind(...(scoped?[c.clientId]:[])).all();
  const p=await c.db.prepare(client?"SELECT * FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador') ORDER BY date":scoped?"SELECT * FROM posts WHERE client_id=? ORDER BY date":"SELECT * FROM posts ORDER BY date").bind(...(scoped?[c.clientId]:[])).all();
  const scope=client?" WHERE post_id IN (SELECT id FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador'))":scoped?" WHERE post_id IN (SELECT id FROM posts WHERE client_id=?)":'';
- const co=await c.db.prepare('SELECT * FROM comments'+scope+' ORDER BY created_at, rowid').bind(...(scoped?[c.clientId]:[])).all();
- const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+scope+' ORDER BY created_at DESC').bind(...(scoped?[c.clientId]:[])).all();
+ const commentScope=scope+(scoped?' AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=comments.post_id)':'');
+ const reviewScope=scope+(scoped?' AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=reviews.post_id)':'');
+ const co=await c.db.prepare('SELECT * FROM comments'+commentScope+' ORDER BY created_at, rowid').bind(...(scoped?[c.clientId]:[])).all();
+ const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+reviewScope+' ORDER BY created_at DESC').bind(...(scoped?[c.clientId]:[])).all();
  const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id FROM members WHERE role IN ('client','collaborator') ORDER BY email").all():{results:[]};
  const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?" WHERE client_id=? AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))":scoped?" WHERE client_id=?":'')).bind(...(scoped?[c.clientId]:[])).all();
  return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results,members:m.results,reviews:history.results},{headers:{'Cache-Control':'no-store'}});
@@ -120,7 +122,7 @@ async function POST(req:Request){
   if(existing&&c.role==='client'&&(existing.client_id!==c.clientId||['Idea','Borrador'].includes(existing.status)))return fail('Sin permiso.',403);
   if(b.action==='comment'){
    const body=str(b.body);if(!body)return fail('Escribe un comentario.');
-   await c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved) VALUES(?,?,?,?,?,?,0)').bind(crypto.randomUUID(),existing.id,c.user.displayName,body,new Date().toISOString(),c.role==='client'&&!preview?'client':'team').run();
+   const result=await c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved) SELECT ?,?,?,?,?,?,0 WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND client_id=? AND client_changed_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,body,new Date().toISOString(),c.role==='client'&&!preview?'client':'team',existing.id,existing.client_id,existing.client_changed_at??'').run();if(!result.meta.changes)return fail('La publicación ha cambiado de cliente. Actualiza antes de comentar.',409);
   }else if(b.action==='review'){
    if(collaborator)return fail('La aprobación corresponde al cliente.',403);
    if(!['Aprobado','Cambios solicitados'].includes(b.status)||existing.status!=='En revisión')return fail('Solo se pueden revisar publicaciones pendientes.');
@@ -161,15 +163,18 @@ async function POST(req:Request){
    if(existing?.status==='Publicado')return fail('Las publicaciones publicadas se conservan. Crea una nueva versión para modificarlas.');
    if(typeof b.asset==='string'&&b.asset.length>42000)return fail('Los enlaces de material son demasiado largos.');const materialError=validateMaterial(asset,b.format);if(materialError)return fail(materialError);
    if(!await c.db.prepare('SELECT id FROM clients WHERE id=? AND archived=0').bind(str(b.client_id)).first())return fail('Selecciona un cliente activo.');
-   if(existing&&existing.client_id!==b.client_id)return fail('El cliente de una publicación no se puede cambiar.');
+   const reassign=!!existing&&existing.client_id!==b.client_id;
+   if(reassign&&c.role!=='owner')return fail('Solo el administrador puede cambiar el cliente de una publicación.',403);
+   if(reassign&&await c.db.prepare('SELECT post_id FROM buffer_jobs WHERE post_id=?').bind(existing.id).first())return fail('Esta publicación tiene un envío registrado en Buffer. Crea una nueva versión para asignarla a otro cliente.',409);
    if(existing){const buffer=await c.db.prepare('SELECT state FROM buffer_jobs WHERE post_id=?').bind(existing.id).first<{state:string}>();if(buffer&&lockedBufferStates.includes(buffer.state))return fail('Cancela o resuelve el envío en Buffer antes de editar esta publicación.',409);}
    const changed=existing&&['title','copy','channel','format','date','asset'].some(k=>existing[k]!==({title,copy,date,asset,channel:b.channel,format:b.format} as any)[k]);
-   const status=changed&&['Aprobado','Planificado','Publicado'].includes(existing.status)?'En revisión':b.status;
+   const status=reassign?(existing.status==='Idea'?'Idea':'Borrador'):changed&&['Aprobado','Planificado','Publicado'].includes(existing.status)?'En revisión':b.status;
    if(!existing&&['Aprobado','Planificado','Publicado'].includes(status))return fail('Crea el borrador y envíalo a revisión antes de aprobarlo.');
    if(existing&&['Aprobado','Planificado','Publicado'].includes(status)&&!['Aprobado','Planificado','Publicado'].includes(existing.status))return fail('Aprueba el contenido desde la revisión.');
    if(collaborator&&['Aprobado','Planificado','Publicado'].includes(status))return fail('El colaborador puede preparar y enviar contenido a revisión.',403);
-   const now=new Date().toISOString()+':'+crypto.randomUUID();
-   if(existing){const r=await c.db.prepare(`UPDATE posts SET title=?,copy=?,channel=?,format=?,date=?,status=?,asset=?,updated_at=? WHERE id=? AND updated_at=? AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')}))`).bind(title,copy,b.channel,b.format,date,status,asset,now,existing.id,b.updated_at).run();if(!r.meta.changes)return fail('Otra persona ha actualizado esta publicación. Recarga para ver los cambios.',409);}
+   const changedAt=new Date().toISOString();
+   const now=changedAt+':'+crypto.randomUUID();
+   if(existing){const r=await c.db.prepare(`UPDATE posts SET title=?,copy=?,channel=?,format=?,date=?,status=?,asset=?,updated_at=?,client_id=?,client_changed_at=? WHERE id=? AND updated_at=? AND (?=0 OR NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id)) AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')}))`).bind(title,copy,b.channel,b.format,date,status,asset,now,b.client_id,reassign?changedAt:existing.client_changed_at??'',existing.id,b.updated_at,reassign?1:0).run();if(!r.meta.changes)return fail('Otra persona ha actualizado esta publicación. Recarga para ver los cambios.',409);}
    else await c.db.prepare('INSERT INTO posts(id,client_id,title,copy,channel,format,date,status,asset,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),b.client_id,title,copy,b.channel,b.format,date,status,asset,now).run();
   }
  }else return fail('Acción desconocida.');

@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const sql=new DatabaseSync(':memory:');
-for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
+for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{
  constructor(q,args=[]){this.q=q;this.args=args;}
  bind(...args){return new Statement(this.q,args);}
@@ -223,3 +223,37 @@ identity={userId:'doomed',email:'doomed@example.com',displayName:'Client'};await
 console.log('Passed: exact client-name confirmation, administrator-only deletion, dependent records, published posts, other-client preservation and access revocation.');
 
 console.log('Passed: collaborator brand isolation, draft editing, team-side comments, forbidden approval/deletion, access management and export.');
+
+// Only the owner can reassign; old feedback stays private to the team.
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+await post({action:'client',...a,archived:0});await post({action:'client',...b,archived:0});
+await post({...draft,title:'Reasignación',status:'En revisión'});
+let moving=(await get()).posts.find(p=>p.title==='Reasignación');
+await post({action:'comment',id:moving.id,body:'Comentario del cliente anterior'});
+await post({action:'review',id:moving.id,updated_at:moving.updated_at,status:'Aprobado'});
+moving=(await get()).posts.find(p=>p.id===moving.id);
+const previousVersion={...moving};
+identity={userId:'profile-team',email:'profile-team@example.com',displayName:'Team'};
+await post({...moving,action:'post',client_id:b.id},403);
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+await post({...moving,action:'post',client_id:'missing-client'},400);
+await post({action:'client',...b,archived:1});await post({...moving,action:'post',client_id:b.id},400);await post({action:'client',...b,archived:0});
+await post({...moving,action:'post',client_id:b.id});
+moving=(await get()).posts.find(p=>p.id===moving.id);assert.equal(moving.client_id,b.id);assert.equal(moving.status,'Borrador');assert.ok(moving.client_changed_at);
+assert((await get()).comments.some(c=>c.post_id===moving.id));assert((await get()).reviews.some(r=>r.post_id===moving.id));
+assert(!(await get(200,a.id)).posts.some(p=>p.id===moving.id));assert(!(await get(200,b.id)).posts.some(p=>p.id===moving.id));
+await post({...previousVersion,action:'post',client_id:a.id},409);
+await post({...moving,action:'post',status:'En revisión'});moving=(await get()).posts.find(p=>p.id===moving.id);
+const targetView=await get(200,b.id);assert(targetView.posts.some(p=>p.id===moving.id));assert(!targetView.comments.some(c=>c.post_id===moving.id));assert(!targetView.reviews.some(r=>r.post_id===moving.id));
+await post({action:'member',email:'new-target@example.com',role:'client',client_id:b.id});
+identity={userId:'new-target',email:'new-target@example.com',displayName:'Nuevo cliente'};await post({...moving,action:'post',client_id:a.id},403);
+await post({action:'comment',id:moving.id,body:'Comentario del nuevo cliente'});assert((await get()).comments.some(c=>c.post_id===moving.id&&c.body==='Comentario del nuevo cliente'));
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+assert((await get()).comments.some(c=>c.post_id===moving.id&&c.body==='Comentario del cliente anterior'));
+await post({...draft,title:'Con envío',status:'Borrador'});const withJob=(await get()).posts.find(p=>p.title==='Con envío');
+for(const state of ['queued','scheduled','sent','error','cancelled']){sql.prepare("INSERT OR REPLACE INTO buffer_jobs(post_id,client_id,state,mode,snapshot,created_at,updated_at) VALUES(?,?,?,'manual','{}','now','now')").run(withJob.id,a.id,state);await post({...withJob,action:'post',client_id:b.id},409);}
+assert.equal((await get()).posts.find(p=>p.id===withJob.id).client_id,a.id);
+// A Buffer job created after validation must also prevent the move.
+sql.prepare('DELETE FROM buffer_jobs WHERE post_id=?').run(withJob.id);const movePrepare=db.prepare;db.prepare=q=>{const statement=movePrepare(q),bind=statement.bind;statement.bind=function(...args){const bound=bind.apply(this,args);if(q.startsWith('UPDATE posts SET title')){const run=bound.run;bound.run=async()=>{sql.prepare("INSERT INTO buffer_jobs(post_id,client_id,state,mode,snapshot,created_at,updated_at) VALUES(?,?,'error','manual','{}','now','now')").run(withJob.id,a.id);return run.call(bound);};}return bound;};return statement;};
+await post({...withJob,action:'post',client_id:b.id},409);db.prepare=movePrepare;assert.equal((await get()).posts.find(p=>p.id===withJob.id).client_id,a.id);
+console.log('Passed: owner-only reassignment, active target validation, draft reset, stale versions, feedback isolation and concurrent Buffer protection.');
