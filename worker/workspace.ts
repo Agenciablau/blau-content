@@ -42,7 +42,7 @@ async function GET(req?:Request){
  const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+scope+' ORDER BY created_at DESC').bind(...(scoped?[c.clientId]:[])).all();
  const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id FROM members WHERE role IN ('client','collaborator') ORDER BY email").all():{results:[]};
  const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?" WHERE client_id=? AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))":scoped?" WHERE client_id=?":'')).bind(...(scoped?[c.clientId]:[])).all();
- return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,clients:cl.results,posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results,members:m.results,reviews:history.results},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results,members:m.results,reviews:history.results},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
 async function POST(req:Request){
@@ -96,7 +96,7 @@ async function POST(req:Request){
  }else if(b.action==='client'){
   if(!staff)return fail('Solo el equipo puede gestionar clientes.',403);
   const name=str(b.name,100),color=str(b.color,7);if(!name||!/^#[0-9a-f]{6}$/i.test(color))return fail('Introduce nombre y color válidos.');
-  let profile:string;try{const current=b.id?await c.db.prepare('SELECT profile FROM clients WHERE id=?').bind(str(b.id)).first<{profile:string}>():null;if(b.id&&!current)return fail('Cliente no encontrado.',404);profile=JSON.stringify(normalizeClientProfile(b.profile===undefined?current?.profile:b.profile));if(c.role!=='owner'&&JSON.stringify(normalizeClientProfile(profile).monthly_goals)!==JSON.stringify(normalizeClientProfile(current?.profile).monthly_goals))return fail('Solo el administrador puede cambiar el compromiso mensual.',403);}catch(e){return fail(e instanceof Error?e.message:'Datos del cliente no válidos.');}
+  let profile:string;try{const current=b.id?await c.db.prepare('SELECT profile FROM clients WHERE id=?').bind(str(b.id)).first<{profile:string}>():null;if(b.id&&!current)return fail('Cliente no encontrado.',404);const nextProfile=normalizeClientProfile(b.profile===undefined?current?.profile:b.profile);if(c.role!=='owner')nextProfile.drive_folder_url=normalizeClientProfile(current?.profile).drive_folder_url;profile=JSON.stringify(nextProfile);if(c.role!=='owner'&&JSON.stringify(normalizeClientProfile(profile).monthly_goals)!==JSON.stringify(normalizeClientProfile(current?.profile).monthly_goals))return fail('Solo el administrador puede cambiar el compromiso mensual.',403);}catch(e){return fail(e instanceof Error?e.message:'Datos del cliente no válidos.');}
   if(b.id){await c.db.prepare('UPDATE clients SET name=?,color=?,notes=?,archived=?,profile=? WHERE id=?').bind(name,color,str(b.notes),b.archived?1:0,profile,str(b.id)).run();}
   else await c.db.prepare('INSERT INTO clients(id,name,color,notes,profile) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),name,color,str(b.notes),profile).run();
  }else if(b.action==='member'){
@@ -104,7 +104,10 @@ async function POST(req:Request){
   const email=str(b.email,254).toLowerCase(),role=b.role;
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!['team','client','collaborator'].includes(role))return fail('Revisa el correo y el rol.');
   if(['client','collaborator'].includes(role)&&!await c.db.prepare('SELECT id FROM clients WHERE id=?').bind(str(b.client_id)).first())return fail('Selecciona un cliente.');
-  await c.db.prepare('INSERT INTO members(email,role,client_id) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET role=excluded.role,client_id=excluded.client_id').bind(email,role,['client','collaborator'].includes(role)?str(b.client_id):null).run();
+  let drive:string|undefined;if(['client','collaborator'].includes(role)&&Object.hasOwn(b,'drive_folder_url')){try{drive=normalizeClientProfile({drive_folder_url:b.drive_folder_url}).drive_folder_url;}catch(e){return fail(e instanceof Error?e.message:'Enlace de Drive no válido.');}}
+  const operations=[c.db.prepare('INSERT INTO members(email,role,client_id) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET role=excluded.role,client_id=excluded.client_id').bind(email,role,['client','collaborator'].includes(role)?str(b.client_id):null)];
+  if(drive!==undefined)operations.push(c.db.prepare("UPDATE clients SET profile=json_set(COALESCE(profile,'{}'),'$.drive_folder_url',?) WHERE id=?").bind(drive,str(b.client_id)));
+  await c.db.batch(operations);
  }else if(b.action==='removeMember'){
   if(c.role!=='owner')return fail('Sin permiso.',403);
   await c.db.prepare('DELETE FROM members WHERE email=?').bind(str(b.email,254).toLowerCase()).run();

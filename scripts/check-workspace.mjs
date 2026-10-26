@@ -168,6 +168,29 @@ assert.equal(profiles.readClientProfile({website:'htt',contact_email:'person@'})
 assert.equal(profiles.normalizeClientProfile(undefined).website,'','Old backups accept missing profiles');
 console.log('Passed: client profiles, URL/email validation, backup persistence and scoped user visibility.');
 
+// Drive is administrator-only and must preserve the complete monthly agreement.
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+const goals={feed:12,stories:20,email:2,linkedin:4};
+const currentA=(await get()).clients.find(c=>c.id===a.id);
+await post({action:'client',...currentA,profile:{...profiles.readClientProfile(currentA.profile),monthly_goals:goals,drive_folder_url:'https://drive.google.com/drive/folders/clientA'}});
+for(const invalid of ['javascript:alert(1)','https://drive.google.com.evil.test/drive/folders/a','https://drive.google.com/file/d/a/view','https://user@drive.google.com/drive/folders/a'])await post({action:'member',email:'profile-client@example.com',role:'client',client_id:a.id,drive_folder_url:invalid},400);
+await post({action:'member',email:'profile-client@example.com',role:'client',client_id:a.id,drive_folder_url:'https://drive.google.com/drive/u/0/folders/newFolder?usp=sharing'});
+let driveProfile=profiles.readClientProfile((await get()).clients.find(c=>c.id===a.id).profile);
+assert.deepEqual(driveProfile.monthly_goals,goals);assert.equal(driveProfile.website,profile.website);assert.equal(driveProfile.drive_folder_url,'https://drive.google.com/drive/u/0/folders/newFolder?usp=sharing');
+assert.equal(profiles.readClientProfile((await get()).clients.find(c=>c.id===b.id).profile).drive_folder_url,'');
+assert.equal(JSON.parse((await get(200,a.id)).clients[0].profile).drive_folder_url,undefined);
+identity={userId:'profile-client',email:'profile-client@example.com',displayName:'Client'};
+assert.equal(JSON.parse((await get()).clients[0].profile).drive_folder_url,undefined);
+await post({action:'member',email:'profile-client@example.com',role:'client',client_id:a.id,drive_folder_url:''},403);
+identity={userId:'profile-team',email:'profile-team@example.com',displayName:'Team'};
+const teamA=(await get()).clients.find(c=>c.id===a.id);assert.equal(JSON.parse(teamA.profile).drive_folder_url,undefined);
+await post({action:'client',...teamA,profile:{...profiles.readClientProfile(teamA.profile),drive_folder_url:'https://drive.google.com/drive/folders/forbidden'}});
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+driveProfile=profiles.readClientProfile((await get()).clients.find(c=>c.id===a.id).profile);assert.equal(driveProfile.drive_folder_url,'https://drive.google.com/drive/u/0/folders/newFolder?usp=sharing');assert.deepEqual(driveProfile.monthly_goals,goals);
+await post({action:'member',email:'profile-client@example.com',role:'client',client_id:a.id,drive_folder_url:''});
+assert.equal(profiles.readClientProfile((await get()).clients.find(c=>c.id===a.id).profile).drive_folder_url,'');
+console.log('Passed: owner-only Drive visibility and edits, URL validation, member updates, preview isolation and monthly commitment preservation.');
+
 // Deleting a client requires its exact name and removes its complete scoped graph.
 identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
 await post({action:'client',name:'Cliente a eliminar',color:'#13dbfb',profile});
