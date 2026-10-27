@@ -34,7 +34,7 @@ await sendDigests(env,new Date('2026-10-27T21:00:00Z'));
 const by=e=>sent.filter(s=>s.to===e);
 assert.deepEqual(sent.map(s=>s.to).sort(),['cliente@a.com','owner@example.com','team@example.com']);
 const owner=by('owner@example.com')[0].text,ca=by('cliente@a.com')[0].text;
-assert.match(owner,/Luster/);assert.match(owner,/Otra marca/);assert.match(owner,/Aprobado por cliente: Aprobada por Ana/);assert.match(owner,/Post de B: Bea: Cambia el texto/);assert.match(owner,/¿Podemos cambiar la portada\?/);assert.doesNotMatch(owner,/Comentario antiguo/);assert.equal((owner.match(/Cambia el texto/g)||[]).length,1);
+assert.match(owner,/Luster/);assert.match(owner,/Otra marca/);assert.match(owner,/Aprobado por cliente \(LinkedIn · Imagen · por Ana\)/);assert.match(owner,/Post de B \(Instagram · Reel · Bea\): Cambia el texto/);assert.equal(by('owner@example.com')[0].subject,'Blau · 1 cambio pedido · 1 aprobada · 1 comentario');assert.match(by('cliente@a.com')[0].html,/Tienes contenido listo para revisar/);assert.match(by('owner@example.com')[0].html,/RESUMEN · 22:00/);assert.match(owner,/¿Podemos cambiar la portada\?/);assert.doesNotMatch(owner,/Comentario antiguo/);assert.equal((owner.match(/Cambia el texto/g)||[]).length,1);
 assert.match(ca,/Pendientes de tu aprobación/);assert.match(ca,/Reel nuevo/);assert.match(ca,/Hecho, revisa la nueva versión/);
 for(const hidden of ['Borrador oculto','Nota interna','Post de B','Otra marca','Aprobado por cliente','Comentario antes de reasignar'])assert.doesNotMatch(ca,new RegExp(hidden));
 assert.match(by('cliente@a.com')[0].html,/https:\/\/app\.example\.com/);assert.doesNotMatch(by('cliente@a.com')[0].html,/<script/);
