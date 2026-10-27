@@ -191,6 +191,28 @@ await post({action:'member',email:'profile-client@example.com',role:'client',cli
 assert.equal(profiles.readClientProfile((await get()).clients.find(c=>c.id===a.id).profile).drive_folder_url,'');
 console.log('Passed: owner-only Drive visibility and edits, URL validation, member updates, preview isolation and monthly commitment preservation.');
 
+// Custom brand links are staff-only, validated and preserved by team edits.
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+let linkA=(await get()).clients.find(c=>c.id===a.id);
+for(const invalid of [[{label:'Malo',url:'javascript:alert(1)'}],[{label:'Sin enlace',url:''}],[{label:'Usuario',url:'https://user@example.com/a'}],{label:'x'},Array.from({length:31},(_,i)=>({label:'L'+i,url:'https://example.com/'+i}))])await post({action:'client',...linkA,profile:{...profiles.readClientProfile(linkA.profile),links:invalid}},400);
+await post({action:'client',...linkA,profile:{...profiles.readClientProfile(linkA.profile),links:[{label:' Fotos Luster ',url:'https://luster.example.com/descargas?marca=1'},{label:'',url:''},{label:'',url:'https://wetransfer.com/downloads/abc'}]}});
+const savedLinks=[{label:'Fotos Luster',url:'https://luster.example.com/descargas?marca=1'},{label:'wetransfer.com',url:'https://wetransfer.com/downloads/abc'}];
+assert.deepEqual(profiles.readClientProfile((await get()).clients.find(c=>c.id===a.id).profile).links,savedLinks);
+assert.deepEqual(profiles.normalizeClientProfile(JSON.stringify({links:savedLinks})).links,savedLinks);
+assert.equal(JSON.parse((await get(200,a.id)).clients[0].profile).links,undefined);
+await post({action:'member',email:'links-collaborator@example.com',role:'collaborator',client_id:a.id});
+identity={userId:'links-collaborator',email:'links-collaborator@example.com',displayName:'Collaborator'};
+assert.equal(JSON.parse((await get()).clients[0].profile).links,undefined);
+identity={userId:'profile-client',email:'profile-client@example.com',displayName:'Client'};
+assert.equal(JSON.parse((await get()).clients[0].profile).links,undefined);
+identity={userId:'profile-team',email:'profile-team@example.com',displayName:'Team'};
+linkA=(await get()).clients.find(c=>c.id===a.id);assert.deepEqual(profiles.readClientProfile(linkA.profile).links,savedLinks);
+await post({action:'client',...linkA,profile:{...profiles.readClientProfile(linkA.profile),phone:'+34 600 000 000'}});
+assert.deepEqual(profiles.readClientProfile((await get()).clients.find(c=>c.id===a.id).profile).links,savedLinks);
+identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+await post({action:'removeMember',email:'links-collaborator@example.com'});
+console.log('Passed: staff-only custom brand links, link validation, empty rows, team edits and client/collaborator isolation.');
+
 // Deleting a client requires its exact name and removes its complete scoped graph.
 identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
 await post({action:'client',name:'Cliente a eliminar',color:'#13dbfb',profile});
