@@ -242,3 +242,18 @@ body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-seri
 .app-shell .access-backup{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}.app-shell .access-backup .secondary-btn{min-height:40px;color:var(--blau-navy);font-weight:600;cursor:pointer}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .app-shell .access-note{margin:16px 0 0}.app-shell .session-body .secondary-btn{justify-content:center;margin-bottom:10px}
+.app-shell .goal-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0 0 20px}
+.app-shell .goal-card{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--blau-line);border-radius:12px;background:#fff}
+.app-shell .goal-card>div{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.app-shell .goal-card>div span{font-size:13px;font-weight:600;color:var(--blau-text)}.app-shell .goal-card small{font-size:12px;color:#7a5100}.app-shell .goal-card.done small{color:#16693a}
+.app-shell .goal-card p{margin:0;font-size:14px;color:var(--blau-muted);line-height:1}.app-shell .goal-card p strong{font-size:22px;font-weight:700;color:var(--blau-ink)}.app-shell .goal-card .goal-off{font-size:13px;color:#9aa7b3;line-height:1.4}
+.app-shell .goal-card progress{appearance:none;-webkit-appearance:none;width:100%;height:6px;border:0;border-radius:3px;background:#edf1f4;overflow:hidden}.app-shell .goal-card progress::-webkit-progress-bar{background:#edf1f4;border-radius:3px}.app-shell .goal-card progress::-webkit-progress-value{background:#13dbfb;border-radius:3px}.app-shell .goal-card progress::-moz-progress-bar{background:#13dbfb;border-radius:3px}
+.app-shell .goal-card.done progress::-webkit-progress-value{background:#2fa862}.app-shell .goal-card.done progress::-moz-progress-bar{background:#2fa862}
+.app-shell .cal-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--blau-line);border-radius:12px 12px 0 0;border-bottom:0;background:#fff}
+.app-shell .cal-bar .month-controls{display:flex;align-items:center;gap:4px}.app-shell .cal-bar .month-controls h2{min-width:130px;margin:0;text-align:center;font-size:15px;font-weight:600;color:var(--blau-ink)}.app-shell .cal-bar .month-controls h2::first-letter{text-transform:uppercase}
+.app-shell .cal-bar .icon-btn{width:36px;height:36px;border:1px solid var(--blau-line);border-radius:8px;background:#fff}.app-shell .cal-bar .today-btn{height:36px;padding:0 12px;margin-left:4px;border:1px solid var(--blau-line);border-radius:8px;background:#fff;color:var(--blau-navy);font-size:13px;font-weight:600}
+.app-shell .filters.with-cal-bar{border-top-left-radius:0;border-top-right-radius:0;margin-top:0}
+.app-shell .channel-chips{display:flex;flex-wrap:wrap;gap:6px}.app-shell .channel-chips button{min-height:32px;padding:0 14px;border:1px solid #c9d5de;border-radius:16px;background:#fff;color:var(--blau-text);font-size:13px;cursor:pointer}.app-shell .channel-chips button.on{border-color:var(--blau-navy);background:var(--blau-navy);color:#fff;font-weight:600}
+.app-shell .filters select.state-pill{border-style:dashed;border-color:#b9c6d1;border-radius:16px}
+@media(max-width:979px){.app-shell .cal-bar{border-radius:12px;border-bottom:1px solid var(--blau-line);margin-bottom:12px}.app-shell .filters.with-cal-bar{border-radius:12px}}
+@media(min-width:980px){.app-shell .filters.with-cal-bar .search{flex:1 1 200px;max-width:300px}}
+@media(max-width:600px){.app-shell .goal-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.app-shell .goal-card{padding:10px 12px}.app-shell .goal-card>div{flex-direction:column;gap:2px}}
