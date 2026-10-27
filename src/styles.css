@@ -347,3 +347,8 @@ body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-seri
 .modal-overlay .fixed-client small{flex-basis:auto}
 .modal-overlay .editor-form>div:not(.form-grid):not(.form-actions):not(.form-note){display:flex;flex-direction:column;gap:14px}
 @media(max-width:600px){.modal-overlay .form-actions>*{min-width:0;padding:0 12px;white-space:nowrap}}
+/* Comentarios: color según quién escribe */
+.drawer-overlay .comments article.by-client{background:#effaf4;border-color:#c5ead6}.drawer-overlay .comments article.by-client .avatar{background:#0e8a5f}
+.drawer-overlay .comments .comment-role{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;background:#e0edff;color:#1a55ad}.drawer-overlay .comments article.by-client .comment-role{background:#d3f2e2;color:#0b6b4a}
+.drawer-overlay .comments b{flex:0 1 auto;min-width:0}
+.drawer-overlay .comments article{margin:0!important}
