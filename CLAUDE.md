@@ -10,7 +10,7 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 - Un push o merge a `main` activa el despliegue automático de Cloudflare (`npm run build` + `npm run deploy`, que aplica migraciones D1). No integres, no despliegues y no ejecutes `npm run deploy` ni `wrangler d1 migrations apply --remote` sin autorización expresa.
 - No modifiques datos de producción para hacer pruebas.
 - No cambies permisos, roles, credenciales, recursos de Cloudflare (D1, R2, Access, dominios, variables) ni conexiones externas (Buffer, Google) sin una petición expresa.
-- No pidas ni guardes secretos. Las variables (`ADMIN_EMAIL`, `TEAM_DOMAIN`, `POLICY_AUD`, `APP_ORIGIN`, `R2_PUBLIC_ORIGIN`, `BUFFER_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`) viven en Cloudflare; `keep_vars` las conserva. No subas `.dev.vars`, `.env*`, copias de seguridad ni archivos de clientes.
+- No pidas ni guardes secretos. Las variables (`ADMIN_EMAIL`, `TEAM_DOMAIN`, `POLICY_AUD`, `APP_ORIGIN`, `R2_PUBLIC_ORIGIN`, `BUFFER_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, `BREVO_API_KEY`, `EMAIL_FROM`) viven en Cloudflare; `keep_vars` las conserva. No subas `.dev.vars`, `.env*`, copias de seguridad ni archivos de clientes.
 - Haz cambios acotados y conserva las funciones existentes. Interfaz siempre en español, con la identidad visual Blau (`src/styles.css`, `public/blau-content-logo.png`).
 - Si se pide una propuesta visual antes de implementar, entrega primero una maqueta sin tocar la aplicación.
 
@@ -18,7 +18,7 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 
 - `src/`: React 19 + TypeScript + Vite. `Planner.tsx` contiene casi toda la interfaz (vistas, barra lateral, modales). Componentes auxiliares: `ClientProfile*`, `MonthlyCommitments`, `Buffer*`, `CreativePreview`, `CarouselLinksEditor`, `DeleteClientConfirmation`.
 - `worker/`: Cloudflare Worker que sirve `dist/` y la API.
-  - `index.ts`: cabeceras de seguridad, comprobación de origen, autenticación y enrutado. Cron cada minuto → `processStoryQueue`.
+  - `index.ts`: cabeceras de seguridad, comprobación de origen, autenticación y enrutado. Cron cada minuto → `processStoryQueue` y `sendDigests` (resúmenes por correo con Brevo a las 10:00 y 22:00 de Madrid, `email-digest.ts`).
   - `auth.ts`: verificación del JWT de Cloudflare Access (`Cf-Access-Jwt-Assertion`, RS256, emisor, audiencia, caducidad).
   - `workspace.ts`: `GET/POST /api/workspace` (acciones `init`, `import`, `client`, `deleteClient`, `member`, `removeMember`, `post`, `review`, `comment`, `delete`; `?export=1`, `?preview=<cliente>`). Aquí están los permisos y el aislamiento por cliente.
   - `integrations.ts`, `buffer-api.ts`, `drive-api.ts`: `/api/integrations/*`, Buffer, OAuth de Google Drive (solo lectura) y copias en R2.

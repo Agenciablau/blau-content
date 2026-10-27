@@ -1,0 +1,1 @@
+CREATE TABLE email_digests (slot TEXT PRIMARY KEY, window_from TEXT NOT NULL, window_to TEXT NOT NULL, sent INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
