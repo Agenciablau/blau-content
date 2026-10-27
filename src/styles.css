@@ -257,3 +257,4 @@ body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-seri
 @media(max-width:979px){.app-shell .cal-bar{border-radius:12px;border-bottom:1px solid var(--blau-line);margin-bottom:12px}.app-shell .filters.with-cal-bar{border-radius:12px}}
 @media(min-width:980px){.app-shell .filters.with-cal-bar .search{flex:1 1 200px;max-width:300px}}
 @media(max-width:600px){.app-shell .goal-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.app-shell .goal-card{padding:10px 12px}.app-shell .goal-card>div{flex-direction:column;gap:2px}}
+.app-shell .cpd-btn.primary,.app-shell .cpd-btn.primary:hover{color:#fff}
