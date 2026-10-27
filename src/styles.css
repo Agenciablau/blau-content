@@ -258,3 +258,14 @@ body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-seri
 @media(min-width:980px){.app-shell .filters.with-cal-bar .search{flex:1 1 200px;max-width:300px}}
 @media(max-width:600px){.app-shell .goal-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.app-shell .goal-card{padding:10px 12px}.app-shell .goal-card>div{flex-direction:column;gap:2px}}
 .app-shell .cpd-btn.primary,.app-shell .cpd-btn.primary:hover{color:#fff}
+.app-shell .review-card{display:flex;flex-direction:column;gap:12px;border-left:1px solid var(--blau-line)}.app-shell .review-card>div:first-child{display:flex;justify-content:space-between;align-items:center;gap:8px}.app-shell .review-card h2{margin:0}.app-shell .review-card .review-thumb{margin:0}
+.app-shell .change-note{margin:0;padding:10px 12px;border-radius:8px;background:#fff4ef;color:#7a2a08;font-size:13px;line-height:1.5}
+.app-shell .review-when{margin:0;font-size:13px;color:var(--blau-muted)}
+.app-shell .review-card .review-cta{justify-content:center;min-height:40px;margin-top:auto;color:var(--blau-navy);font-weight:600}
+.app-shell .review-card>div:first-child{flex-wrap:nowrap}.app-shell .review-card>div:first-child .client-pill{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.app-shell .review-card>div:first-child .badge{flex:none;white-space:nowrap}
+/* Ventanas como panel lateral derecho, con fondo difuminado */
+.modal-overlay,.drawer-overlay{justify-content:flex-end!important;align-items:stretch!important;padding:0!important;background:rgba(15,29,46,.28)!important;-webkit-backdrop-filter:blur(3px) saturate(115%);backdrop-filter:blur(3px) saturate(115%)!important;animation:blau-fade .18s ease-out}
+.modal-overlay>.modal,.drawer-overlay>.drawer{width:480px!important;max-width:100%!important;height:100%;max-height:none!important;border-radius:0!important;margin:0!important;overflow-y:auto;box-shadow:-12px 0 40px rgba(15,29,46,.16)!important;animation:blau-slide .22s ease-out}
+.modal-overlay>.modal.wide{width:600px!important}
+@keyframes blau-fade{from{opacity:0}to{opacity:1}}@keyframes blau-slide{from{transform:translateX(32px);opacity:.6}to{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){.modal-overlay,.drawer-overlay,.modal-overlay>.modal,.drawer-overlay>.drawer{animation:none}}
