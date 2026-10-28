@@ -4,6 +4,7 @@ import {importBackup} from './import-backup';
 import {validateMaterial,materialLinks} from '../shared/material-links';
 import {normalizeClientProfile} from '../shared/client-profile';
 import {lockedBufferStates,bufferState} from '../shared/buffer-scheduling';
+import {sendWelcome} from './email-welcome';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
 const channels=['Instagram','LinkedIn','Email','Blog / web','TikTok','Facebook'];
@@ -61,6 +62,7 @@ async function POST(req:Request){
  const origin=req.headers.get('origin'); if(origin&&origin!==new URL(req.url).origin)return fail('Origen no permitido.',403);
  let b:any;try{b=await req.json();}catch{return fail('Datos no válidos.');}
  if(!b||typeof b!=='object')return fail('Datos no válidos.');
+ const extra:any={};
  if(preview&&!['review','comment'].includes(b.action))return fail('Desde la vista de cliente solo puedes comentar o revisar publicaciones.',403);
  if(b.action==='init'){
   if(c.user.email!==env.ADMIN_EMAIL?.trim().toLowerCase())return fail('Solo el administrador configurado puede crear el espacio.',403);
@@ -112,7 +114,13 @@ async function POST(req:Request){
   let drive:string|undefined;if(['client','collaborator'].includes(role)&&Object.hasOwn(b,'drive_folder_url')){try{drive=normalizeClientProfile({drive_folder_url:b.drive_folder_url}).drive_folder_url;}catch(e){return fail(e instanceof Error?e.message:'Enlace de Drive no válido.');}}
   const operations=[c.db.prepare('INSERT INTO members(email,role,client_id,name) VALUES(?,?,?,?) ON CONFLICT(email) DO UPDATE SET role=excluded.role,client_id=excluded.client_id,name=excluded.name').bind(email,role,['client','collaborator'].includes(role)?str(b.client_id):null,str(b.name,80))];
   if(drive!==undefined)operations.push(c.db.prepare("UPDATE clients SET profile=json_set(COALESCE(profile,'{}'),'$.drive_folder_url',?) WHERE id=?").bind(drive,str(b.client_id)));
+  const isNew=!await c.db.prepare('SELECT 1 FROM members WHERE email=?').bind(email).first();
   await c.db.batch(operations);
+  if(isNew)extra.welcome=await sendWelcome(env,{name:str(b.name,80),email,role,brand:role==='team'?'':(await c.db.prepare('SELECT name FROM clients WHERE id=?').bind(str(b.client_id)).first<any>())?.name??''});
+ }else if(b.action==='welcome'){
+  if(c.role!=='owner')return fail('Sin permiso.',403);
+  const m=await c.db.prepare('SELECT m.email,m.role,m.name,cl.name AS brand FROM members m LEFT JOIN clients cl ON cl.id=m.client_id WHERE m.email=?').bind(str(b.email,254).toLowerCase()).first<any>();if(!m)return fail('Acceso no encontrado.',404);
+  extra.welcome=await sendWelcome(env,{name:m.name,email:m.email,role:m.role,brand:m.role==='team'?'':m.brand??''});
  }else if(b.action==='ownerName'){
   if(c.role!=='owner')return fail('Sin permiso.',403);
   await c.db.prepare('UPDATE workspace SET owner_name=? WHERE id=1').bind(str(b.name,80)).run();
@@ -184,7 +192,7 @@ async function POST(req:Request){
    else await c.db.prepare('INSERT INTO posts(id,client_id,title,copy,channel,format,date,status,asset,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),b.client_id,title,copy,b.channel,b.format,date,status,asset,now).run();
   }
  }else return fail('Acción desconocida.');
- return Response.json({ok:true});
+ return Response.json({ok:true,...extra});
 }
 
 return {GET,POST};

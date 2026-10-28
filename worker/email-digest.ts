@@ -1,6 +1,6 @@
 import type {Env} from './types';
 export const schedule={team:[10,22],client:[10,16]};
-const esc=(s:any)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+export const esc=(s:any)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const at=(v:string)=>String(v??'').slice(0,24);
 const clip=(s:string,n=280)=>s.length>n?s.slice(0,n-1)+'…':s;
 export function madridSlot(now:Date){const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23',weekday:'short'}).formatToParts(now).map(x=>[x.type,x.value]));return {hour:Number(p.hour),slot:`${p.year}-${p.month}-${p.day} ${p.hour}:00`,weekend:['Sat','Sun'].includes(p.weekday)};}
@@ -58,7 +58,7 @@ ${groups.map((g,n)=>`<tr><td style="background:#ffffff;padding:${n?'8px':'30px'}
  const text=`${title}.\n${intro}\n\n`+groups.map(g=>`${g.client}\n`+g.sections.map(s=>`  ${s.title} (${s.items.length})\n`+s.items.map(i=>`  - ${i.post}${i.meta?' ('+i.meta+')':''}${i.by?' · '+i.by:''}${i.quote?': '+i.quote:''}`).join('\n')).join('\n')).join('\n\n')+(link?`\n\n${cta}: ${link}`:'')+'\n\nBlau · Contenido que se recuerda. · hola@agenciablau.com';
  return {html,text,count,summary};
 }
-async function send(env:Env,to:string,subject:string,body:{html:string;text:string}){
+export async function send(env:Env,to:string,subject:string,body:{html:string;text:string}){
  const r=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':env.BREVO_API_KEY!,'content-type':'application/json',accept:'application/json'},body:JSON.stringify({sender:{name:'Blau Content',email:env.EMAIL_FROM},to:[{email:to}],subject,htmlContent:body.html,textContent:body.text})});
  if(!r.ok){let m='';try{m=String(((await r.json()) as any)?.message??'').slice(0,200);}catch{}throw new Error(`Brevo ${r.status}${m?': '+m:''}`);}
 }
