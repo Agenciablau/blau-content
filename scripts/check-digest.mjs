@@ -8,9 +8,9 @@ assert.deepEqual(madridSlot(new Date('2026-10-27T09:00:00Z')),{hour:10,slot:'202
 const sql=new DatabaseSync(':memory:');for(const m of readdirSync('migrations').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('migrations/'+m,'utf8'));
 class Statement{constructor(q,a=[]){this.q=q;this.a=a;}bind(...a){return new Statement(this.q,a);}async first(){return sql.prepare(this.q).get(...this.a)??null;}async all(){return {results:sql.prepare(this.q).all(...this.a)};}async run(){const r=sql.prepare(this.q).run(...this.a);return {meta:{changes:Number(r.changes)}};}}
 const db={prepare:q=>new Statement(q)};
-sql.exec(`INSERT INTO workspace VALUES(1,'owner-id','owner@example.com');
+sql.exec(`INSERT INTO workspace(id,owner,email,owner_name) VALUES(1,'owner-id','owner@example.com','Camilo de Blau');
 INSERT INTO clients(id,name,color,notes) VALUES('a','Luster','#000',''),('b','Otra marca','#000','');
-INSERT INTO members VALUES('team@example.com','team',NULL),('cliente@a.com','client','a'),('cliente@b.com','client','b'),('colab@a.com','collaborator','a');
+INSERT INTO members(email,role,client_id) VALUES('team@example.com','team',NULL),('cliente@a.com','client','a'),('cliente@b.com','client','b'),('colab@a.com','collaborator','a');
 INSERT INTO posts(id,client_id,title,channel,format,date,status,updated_at,client_changed_at) VALUES
 ('p1','a','Reel nuevo','Instagram','Reel','2026-10-30T10:00','En revisión','2026-10-27T15:00:00.000Z:v1',''),
 ('p2','a','Borrador oculto','Instagram','Reel','','Borrador','2026-10-27T15:00:00.000Z:v2',''),
@@ -21,7 +21,7 @@ INSERT INTO reviews VALUES('r1','p3','Ana','cliente@a.com','client','Aprobado','
 INSERT INTO comments(id,post_id,author,body,created_at,role,resolved) VALUES
 ('c1','p1','Ana','¿Podemos cambiar la portada?','2026-10-27T15:30:00.000Z','client',0),
 ('c2','p4','Bea','Cambia el texto','2026-10-27T17:00:00.000Z','client',0),
-('c3','p1','camilo@agenciablau.com','Hecho, revisa la nueva versión','2026-10-27T16:30:00.000Z','team',1),
+('c3','p1','owner@example.com','Hecho, revisa la nueva versión','2026-10-27T16:30:00.000Z','team',1),
 ('c4','p2','camilo@agenciablau.com','Nota interna en borrador','2026-10-27T16:30:00.000Z','team',1),
 ('c5','p5','camilo@agenciablau.com','Comentario antes de reasignar','2026-10-27T14:00:00.000Z','team',1),
 ('c6','p1','Ana','Comentario antiguo','2026-10-26T15:30:00.000Z','client',0);`);
@@ -38,7 +38,7 @@ assert.match(owner,/Luster/);assert.match(owner,/Otra marca/);assert.match(owner
 await sendDigests(env,new Date('2026-10-27T21:30:00Z'));assert.equal(sent.length,2);assert.equal(sql.prepare("SELECT sent FROM email_digests WHERE slot='team:2026-10-27 22:00'").get().sent,2);assert.equal(sql.prepare("SELECT COUNT(*) n FROM email_digests WHERE slot='client:2026-10-27 22:00'").get().n,0);
 sent.length=0;await sendDigests(env,new Date('2026-10-28T09:00:00Z'));
 assert.deepEqual(sent.map(s=>s.to),['cliente@a.com']);const ca=by('cliente@a.com')[0].text;
-assert.match(ca,/Pendientes de tu aprobación/);assert.match(ca,/Reel nuevo/);assert.match(ca,/Hecho, revisa la nueva versión/);assert.match(by('cliente@a.com')[0].html,/Tienes contenido listo para revisar/);assert.match(by('cliente@a.com')[0].html,/a las 10:00 y a las 16:00, de lunes a viernes/);
+assert.match(ca,/Pendientes de tu aprobación/);assert.match(ca,/Reel nuevo/);assert.match(ca,/Reel nuevo · Camilo de Blau: Hecho, revisa la nueva versión/);assert.doesNotMatch(ca,/owner@example\.com/);assert.match(by('cliente@a.com')[0].html,/Tienes contenido listo para revisar/);assert.match(by('cliente@a.com')[0].html,/a las 10:00 y a las 16:00, de lunes a viernes/);
 for(const hidden of ['Borrador oculto','Nota interna','Post de B','Otra marca','Aprobado por cliente','Comentario antes de reasignar'])assert.doesNotMatch(ca,new RegExp(hidden));
 assert.match(by('cliente@a.com')[0].html,/https:\/\/app\.example\.com/);assert.equal(by('colab@a.com').length,0);
 assert.equal(sql.prepare("SELECT window_from FROM email_digests WHERE slot='client:2026-10-28 10:00'").get().window_from,'2026-10-27T09:00:00.000Z');
@@ -53,4 +53,8 @@ globalThis.fetch=async()=>new Response('{}',{status:500});await sendDigests(env,
 const failed=sql.prepare("SELECT * FROM email_digests WHERE slot='team:2026-11-03 22:00'").get();assert.equal(failed.sent,0);assert.match(failed.error,/Brevo 500/);
 const {sendDigestTest}=await module('worker/email-digest.ts');await assert.rejects(sendDigestTest({DB:db},'owner@example.com'),/BREVO_API_KEY/);sent.length=0;globalThis.fetch=async(url,init)=>{const b=JSON.parse(init.body);sent.push({to:b.to[0].email,subject:b.subject,html:b.htmlContent});return new Response('{}',{status:201});};await sendDigestTest(env,'owner@example.com');assert.equal(sent.length,2);assert.ok(sent.every(s=>s.to==='owner@example.com'&&s.subject.startsWith('[Prueba')));assert.match(sent[1].html,/Tienes contenido listo para revisar/);
 globalThis.fetch=async()=>Response.json({message:'Key not found'},{status:401});await assert.rejects(sendDigestTest(env,'owner@example.com'),/Brevo 401: Key not found/);
-console.log('Passed: test send to the owner only, client digests at 10:00 and 16:00 on weekdays only when actionable, Madrid digest slots, once per slot, team and client recipients, client isolation, hidden drafts, client_changed_at, deduplicated change notes, Brevo errors recorded and no send without key.');
+const {renderWelcome,sendWelcome}=await module('worker/email-welcome.ts');
+const wc=renderWelcome({name:'Ana López',email:'ana@luster.es',role:'client',brand:'Luster',link:'https://app.example.com'});assert.equal(wc.subject,'Ana, ya tienes acceso a Blau Content');assert.match(wc.html,/Hola Ana, ya tienes acceso/);assert.match(wc.html,/Luster/);assert.match(wc.html,/Pedir cambios/);assert.match(wc.html,/ana@luster\.es/);
+const wcol=renderWelcome({name:'',email:'c@x.com',role:'collaborator',brand:'<b>X</b>',link:''});assert.doesNotMatch(wcol.html,/<b>X<\/b>/);assert.match(wcol.html,/Enviar a revisión/);assert.doesNotMatch(wcol.html,/Pedir cambios/);assert.equal(wcol.subject,'Ya tienes acceso a Blau Content');
+assert.equal(await sendWelcome({},{name:'',email:'c@x.com',role:'team',brand:''}),'off');sent.length=0;globalThis.fetch=async(url,init)=>{const b=JSON.parse(init.body);sent.push(b.to[0].email);return new Response('{}',{status:201});};assert.equal(await sendWelcome(env,{name:'',email:'t@x.com',role:'team',brand:''}),'sent');assert.deepEqual(sent,['t@x.com']);globalThis.fetch=async()=>new Response('{}',{status:500});assert.equal(await sendWelcome(env,{name:'',email:'t@x.com',role:'team',brand:''}),'failed');
+console.log('Passed: welcome template per role with escaping, names instead of emails, test send to the owner only, client digests at 10:00 and 16:00 on weekdays only when actionable, Madrid digest slots, once per slot, team and client recipients, client isolation, hidden drafts, client_changed_at, deduplicated change notes, Brevo errors recorded and no send without key.');

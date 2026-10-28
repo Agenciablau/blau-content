@@ -4,6 +4,7 @@ import {importBackup} from './import-backup';
 import {validateMaterial,materialLinks} from '../shared/material-links';
 import {normalizeClientProfile} from '../shared/client-profile';
 import {lockedBufferStates,bufferState} from '../shared/buffer-scheduling';
+import {sendWelcome} from './email-welcome';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
 const channels=['Instagram','LinkedIn','Email','Blog / web','TikTok','Facebook'];
@@ -33,6 +34,7 @@ async function GET(req?:Request){
   if(c.role!=='owner')return fail('Solo el administrador puede exportar.',403);
   const backup:any={exported_at:new Date().toISOString(),version:1};
   for(const table of ['clients','posts','comments','reviews','members'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
+  backup.owner_name=c.w.owner_name??'';
   return Response.json(backup,{headers:{'Cache-Control':'no-store','Content-Disposition':'attachment; filename=blau-content-backup.json'}});
  }
  const cl=await c.db.prepare(scoped?'SELECT * FROM clients WHERE id=?':'SELECT * FROM clients ORDER BY name').bind(...(scoped?[c.clientId]:[])).all();
@@ -42,9 +44,11 @@ async function GET(req?:Request){
  const reviewScope=scope+(scoped?' AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=reviews.post_id)':'');
  const co=await c.db.prepare('SELECT * FROM comments'+commentScope+' ORDER BY created_at, rowid').bind(...(scoped?[c.clientId]:[])).all();
  const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+reviewScope+' ORDER BY created_at DESC').bind(...(scoped?[c.clientId]:[])).all();
- const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id FROM members WHERE role IN ('client','collaborator') ORDER BY email").all():{results:[]};
+ const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id,name FROM members WHERE role IN ('client','collaborator') ORDER BY email").all():{results:[]};
  const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?" WHERE client_id=? AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))":scoped?" WHERE client_id=?":'')).bind(...(scoped?[c.clientId]:[])).all();
- return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results,members:m.results,reviews:history.results},{headers:{'Cache-Control':'no-store'}});
+ const names=new Map<string,string>((await c.db.prepare("SELECT email,name FROM members WHERE name<>''").all<any>()).results.map((r:any)=>[r.email,r.name]));if(c.w.owner_name)names.set(c.w.email,c.w.owner_name);
+ const named=(v:string)=>names.get(String(v??'').toLowerCase())||v;
+ return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author)})),members:m.results,reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)}))},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
 async function POST(req:Request){
@@ -58,6 +62,7 @@ async function POST(req:Request){
  const origin=req.headers.get('origin'); if(origin&&origin!==new URL(req.url).origin)return fail('Origen no permitido.',403);
  let b:any;try{b=await req.json();}catch{return fail('Datos no válidos.');}
  if(!b||typeof b!=='object')return fail('Datos no válidos.');
+ const extra:any={};
  if(preview&&!['review','comment'].includes(b.action))return fail('Desde la vista de cliente solo puedes comentar o revisar publicaciones.',403);
  if(b.action==='init'){
   if(c.user.email!==env.ADMIN_EMAIL?.trim().toLowerCase())return fail('Solo el administrador configurado puede crear el espacio.',403);
@@ -107,9 +112,18 @@ async function POST(req:Request){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!['team','client','collaborator'].includes(role))return fail('Revisa el correo y el rol.');
   if(['client','collaborator'].includes(role)&&!await c.db.prepare('SELECT id FROM clients WHERE id=?').bind(str(b.client_id)).first())return fail('Selecciona un cliente.');
   let drive:string|undefined;if(['client','collaborator'].includes(role)&&Object.hasOwn(b,'drive_folder_url')){try{drive=normalizeClientProfile({drive_folder_url:b.drive_folder_url}).drive_folder_url;}catch(e){return fail(e instanceof Error?e.message:'Enlace de Drive no válido.');}}
-  const operations=[c.db.prepare('INSERT INTO members(email,role,client_id) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET role=excluded.role,client_id=excluded.client_id').bind(email,role,['client','collaborator'].includes(role)?str(b.client_id):null)];
+  const operations=[c.db.prepare('INSERT INTO members(email,role,client_id,name) VALUES(?,?,?,?) ON CONFLICT(email) DO UPDATE SET role=excluded.role,client_id=excluded.client_id,name=excluded.name').bind(email,role,['client','collaborator'].includes(role)?str(b.client_id):null,str(b.name,80))];
   if(drive!==undefined)operations.push(c.db.prepare("UPDATE clients SET profile=json_set(COALESCE(profile,'{}'),'$.drive_folder_url',?) WHERE id=?").bind(drive,str(b.client_id)));
+  const isNew=!await c.db.prepare('SELECT 1 FROM members WHERE email=?').bind(email).first();
   await c.db.batch(operations);
+  if(isNew)extra.welcome=await sendWelcome(env,{name:str(b.name,80),email,role,brand:role==='team'?'':(await c.db.prepare('SELECT name FROM clients WHERE id=?').bind(str(b.client_id)).first<any>())?.name??''});
+ }else if(b.action==='welcome'){
+  if(c.role!=='owner')return fail('Sin permiso.',403);
+  const m=await c.db.prepare('SELECT m.email,m.role,m.name,cl.name AS brand FROM members m LEFT JOIN clients cl ON cl.id=m.client_id WHERE m.email=?').bind(str(b.email,254).toLowerCase()).first<any>();if(!m)return fail('Acceso no encontrado.',404);
+  extra.welcome=await sendWelcome(env,{name:m.name,email:m.email,role:m.role,brand:m.role==='team'?'':m.brand??''});
+ }else if(b.action==='ownerName'){
+  if(c.role!=='owner')return fail('Sin permiso.',403);
+  await c.db.prepare('UPDATE workspace SET owner_name=? WHERE id=1').bind(str(b.name,80)).run();
  }else if(b.action==='removeMember'){
   if(c.role!=='owner')return fail('Sin permiso.',403);
   await c.db.prepare('DELETE FROM members WHERE email=?').bind(str(b.email,254).toLowerCase()).run();
@@ -178,7 +192,7 @@ async function POST(req:Request){
    else await c.db.prepare('INSERT INTO posts(id,client_id,title,copy,channel,format,date,status,asset,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),b.client_id,title,copy,b.channel,b.format,date,status,asset,now).run();
   }
  }else return fail('Acción desconocida.');
- return Response.json({ok:true});
+ return Response.json({ok:true,...extra});
 }
 
 return {GET,POST};
