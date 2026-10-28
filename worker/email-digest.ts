@@ -60,7 +60,7 @@ ${groups.map((g,n)=>`<tr><td style="background:#ffffff;padding:${n?'8px':'30px'}
 }
 async function send(env:Env,to:string,subject:string,body:{html:string;text:string}){
  const r=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':env.BREVO_API_KEY!,'content-type':'application/json',accept:'application/json'},body:JSON.stringify({sender:{name:'Blau Content',email:env.EMAIL_FROM},to:[{email:to}],subject,htmlContent:body.html,textContent:body.text})});
- if(!r.ok)throw new Error(`Brevo ${r.status}`);
+ if(!r.ok){let m='';try{m=String(((await r.json()) as any)?.message??'').slice(0,200);}catch{}throw new Error(`Brevo ${r.status}${m?': '+m:''}`);}
 }
 export async function sendDigests(env:Env,now=new Date()):Promise<void>{
  const db=env.DB;if(!db||!env.BREVO_API_KEY||!env.EMAIL_FROM)return;
@@ -77,4 +77,14 @@ export async function sendDigests(env:Env,now=new Date()):Promise<void>{
  for(const email of team)await out(email,teamGroups,'team');
  for(const c of clients){const groups=clientDigest(c,posts,comments,reviews,from,to);if(groups.length)for(const m of members.filter((m:any)=>m.role==='client'&&m.client_id===c.id))await out(m.email,groups,'client');}
  await db.prepare('UPDATE email_digests SET sent=?,error=? WHERE slot=?').bind(sent,errors.join('; ').slice(0,2000),slot).run();
+}
+export async function sendDigestTest(env:Env,email:string){
+ if(!env.BREVO_API_KEY||!env.EMAIL_FROM)throw new Error('Configura BREVO_API_KEY y EMAIL_FROM en Cloudflare.');
+ const now=Date.now(),t=(m:number)=>new Date(now-m*60e3).toISOString(),d=(n:number)=>new Date(now+n*864e5).toISOString().slice(0,10)+'T10:00';
+ const clients=[{id:'a',name:'Cliente de ejemplo',color:'#13DBFB'}];
+ const posts=[{id:'p1',client_id:'a',title:'Reel de presentación',channel:'Instagram',format:'Reel',date:d(5),status:'Cambios solicitados',updated_at:t(90)+':x',client_changed_at:''},{id:'p2',client_id:'a',title:'Carrusel de novedades',channel:'Instagram',format:'Carrusel',date:d(7),status:'Aprobado',updated_at:t(60)+':x',client_changed_at:''},{id:'p3',client_id:'a',title:'Historia del evento',channel:'Instagram',format:'Historia',date:d(3),status:'En revisión',updated_at:t(30)+':x',client_changed_at:''},{id:'p4',client_id:'a',title:'Post de equipo',channel:'LinkedIn',format:'Imagen',date:d(9),status:'En revisión',updated_at:t(30)+':x',client_changed_at:''}];
+ const reviews=[{post_id:'p1',actor:'Cliente',role:'client',decision:'Cambios solicitados',created_at:t(90)},{post_id:'p2',actor:'Cliente',role:'client',decision:'Aprobado',created_at:t(60)}];
+ const comments=[{post_id:'p1',author:'Cliente',body:'¿Podemos usar una foto más luminosa en la portada?',created_at:t(90),role:'client'},{post_id:'p2',author:'Cliente',body:'Me encanta el resultado, gracias.',created_at:t(50),role:'client'},{post_id:'p1',author:'Equipo Blau',body:'Hecho. Hemos cambiado la portada, échale un ojo.',created_at:t(20),role:'team'}];
+ const from=t(720),to=new Date(now).toISOString(),hour=madridSlot(new Date(now)).hour<16?10:22,link=env.APP_ORIGIN??'';
+ for(const [audience,groups] of [['team',teamDigest(clients,posts,comments,reviews,from,to)],['client',clientDigest(clients[0],posts,comments,reviews,from,to)]] as const){const body=renderDigest(groups,audience,hour,link);await send(env,email,`[Prueba · ${audience==='team'?'equipo':'cliente'}] Blau · ${body.summary.charAt(0).toUpperCase()+body.summary.slice(1)}`,body);}
 }
