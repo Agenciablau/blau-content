@@ -65,13 +65,15 @@ async function send(env:Env,to:string,subject:string,body:{html:string;text:stri
 export async function sendDigests(env:Env,now=new Date()):Promise<void>{
  const db=env.DB;if(!db||!env.BREVO_API_KEY||!env.EMAIL_FROM)return;
  const {hour,slot,weekend}=madridSlot(now),due=(['team','client'] as const).filter(a=>schedule[a].includes(hour)&&!(a==='client'&&weekend));if(!due.length)return;
- const w=await db.prepare('SELECT email FROM workspace WHERE id=1').first<any>();if(!w)return;
+ const w=await db.prepare('SELECT email,owner_name FROM workspace WHERE id=1').first<any>();if(!w)return;
  const link=env.APP_ORIGIN??'',to=now.toISOString();
  for(const audience of due){
   const key=audience+':'+slot,last=await db.prepare('SELECT window_to FROM email_digests WHERE slot LIKE ? ORDER BY window_to DESC LIMIT 1').bind(audience+':%').first<any>();
   const from=last?.window_to??new Date(now.getTime()-12*3600e3).toISOString();
   const claim=await db.prepare('INSERT INTO email_digests(slot,window_from,window_to,created_at) VALUES(?,?,?,?) ON CONFLICT(slot) DO NOTHING').bind(key,from,to,to).run();if(!claim.meta.changes)continue;
-  const [clients,posts,comments,reviews,members]=await Promise.all(['SELECT id,name,color FROM clients WHERE archived=0 ORDER BY name','SELECT id,client_id,title,channel,format,date,status,updated_at,client_changed_at FROM posts','SELECT post_id,author,body,created_at,role FROM comments WHERE created_at>? AND created_at<=?','SELECT post_id,actor,role,decision,created_at FROM reviews','SELECT email,role,client_id FROM members'].map((q,i)=>(i===2?db.prepare(q).bind(from,to):db.prepare(q)).all<any>().then(r=>r.results)));
+  const [clients,posts,comments,reviews,members]=await Promise.all(['SELECT id,name,color FROM clients WHERE archived=0 ORDER BY name','SELECT id,client_id,title,channel,format,date,status,updated_at,client_changed_at FROM posts','SELECT post_id,author,body,created_at,role FROM comments WHERE created_at>? AND created_at<=?','SELECT post_id,actor,role,decision,created_at FROM reviews','SELECT email,role,client_id,name FROM members'].map((q,i)=>(i===2?db.prepare(q).bind(from,to):db.prepare(q)).all<any>().then(r=>r.results)));
+  const names=new Map<string,string>(members.filter((m:any)=>m.name).map((m:any)=>[m.email,m.name]));if(w.owner_name)names.set(w.email,w.owner_name);const named=(v:string)=>names.get(String(v??'').toLowerCase())||v;
+  for(const m of comments)m.author=named(m.author);for(const r of reviews)r.actor=named(r.actor);
   const errors:string[]=[];let sent=0;
   const out=async(email:string,groups:Group[])=>{const body=renderDigest(groups,audience,hour,link);try{await send(env,email,`Blau · ${body.summary.charAt(0).toUpperCase()+body.summary.slice(1)}`,body);sent++;}catch(e){errors.push(email+': '+(e instanceof Error?e.message:'error'));}};
   if(audience==='team'){const groups=teamDigest(clients,posts,comments,reviews,from,to);if(groups.length)for(const email of [...new Set([w.email,...members.filter((m:any)=>m.role==='team').map((m:any)=>m.email)].map((e:string)=>e.toLowerCase()))])await out(email,groups);}

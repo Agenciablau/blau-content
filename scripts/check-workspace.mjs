@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const sql=new DatabaseSync(':memory:');
-for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
+for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{
  constructor(q,args=[]){this.q=q;this.args=args;}
  bind(...args){return new Statement(this.q,args);}
@@ -279,3 +279,13 @@ assert.equal((await get()).posts.find(p=>p.id===withJob.id).client_id,a.id);
 sql.prepare('DELETE FROM buffer_jobs WHERE post_id=?').run(withJob.id);const movePrepare=db.prepare;db.prepare=q=>{const statement=movePrepare(q),bind=statement.bind;statement.bind=function(...args){const bound=bind.apply(this,args);if(q.startsWith('UPDATE posts SET title')){const run=bound.run;bound.run=async()=>{sql.prepare("INSERT INTO buffer_jobs(post_id,client_id,state,mode,snapshot,created_at,updated_at) VALUES(?,?,'error','manual','{}','now','now')").run(withJob.id,a.id);return run.call(bound);};}return bound;};return statement;};
 await post({...withJob,action:'post',client_id:b.id},409);db.prepare=movePrepare;assert.equal((await get()).posts.find(p=>p.id===withJob.id).client_id,a.id);
 console.log('Passed: owner-only reassignment, active target validation, draft reset, stale versions, feedback isolation and concurrent Buffer protection.');
+await post({action:'member',email:'named@example.com',role:'client',client_id:b.id,name:'Ana López'});assert.equal((await get()).members.find(m=>m.email==='named@example.com').name,'Ana López');
+identity={userId:'named',email:'named@example.com',displayName:'named@example.com'};const namedView=await get();assert.equal(namedView.userName,'Ana López');assert.equal(namedView.ownerName,undefined);
+await post({action:'comment',id:moving.id,body:'Comentario con nombre'});await post({action:'ownerName',name:'Intruso'},403);assert.equal((await get()).comments.find(c=>c.body==='Comentario con nombre').author,'Ana López');
+identity={userId:'owner',email:'owner@example.com',displayName:'owner@example.com'};await post({action:'ownerName',name:'Blau Admin'});await post({action:'comment',id:moving.id,body:'Respuesta del administrador'});
+let ownerView=await get();assert.equal(ownerView.ownerName,'Blau Admin');assert.equal(ownerView.userName,'Blau Admin');assert.equal(ownerView.comments.find(c=>c.body==='Respuesta del administrador').author,'Blau Admin');
+assert.equal(sql.prepare("SELECT author FROM comments WHERE body='Comentario con nombre'").get().author,'named@example.com');
+await post({action:'member',email:'named@example.com',role:'client',client_id:b.id,name:'Ana María'});assert.equal((await get()).comments.find(c=>c.body==='Comentario con nombre').author,'Ana María');
+identity={userId:'named',email:'named@example.com',displayName:'named@example.com'};assert.equal((await get()).comments.find(c=>c.body==='Respuesta del administrador').author,'Blau Admin');identity={userId:'owner',email:'owner@example.com',displayName:'owner@example.com'};
+const namedBackup=await (await api.GET(new Request('https://test.local/api/workspace?export=1'))).json();assert.equal(namedBackup.owner_name,'Blau Admin');assert.equal(namedBackup.members.find(m=>m.email==='named@example.com').name,'Ana María');
+console.log('Passed: member and administrator names, owner-only naming, names shown in comments for every role, stored emails unchanged and names kept in backups.');
