@@ -357,3 +357,4 @@ body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-seri
 .preview-banner{color:#3d4c5c!important}.preview-banner b{color:#0f1d2e!important}.preview-banner span{color:#3d4c5c!important}.preview-banner svg{color:#003680}
 .error{background:#ffe6dc!important;color:#a3330a!important}.stale-notice,.stale-notice .text-btn{color:#6b4500!important}.stale-notice .text-btn{text-decoration:underline}
 .range-notice,.no-comments{color:#3d4c5c!important}.form-note{color:#3d4c5c!important}
+@media(min-width:981px){.integration-connections{grid-template-columns:repeat(4,minmax(0,1fr))}}

@@ -52,7 +52,7 @@ assert.equal(JSON.parse((await db.prepare("SELECT profile FROM clients WHERE id=
 await db.prepare("INSERT INTO members(email,role) VALUES('team@example.com','team')").run();
 const forbiddenGoals=await createWorkspaceApi(env,{userId:'team',email:'team@example.com',displayName:'Team'}).POST(new Request('https://test.local/api/workspace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'client',id:'a',name:'Cliente A',color:'#13dbfb',profile:{monthly_goals:{feed:99}}})}));assert.equal(forbiddenGoals.status,403);
 await api({action:'bind',client_id:'a',channel_id:'ig-a'});await api({action:'bind',client_id:'b',channel_id:'ig-a'},400);await api({action:'channels'},403,{origin:'https://evil.example.com'});
-user={userId:'client',email:'client@example.com',displayName:'Client'};await api({action:'channels'},403);await api({action:'schedule',post_id:'p1'},403);user={userId:'owner',email:'owner@example.com',displayName:'Owner'};
+user={userId:'client',email:'client@example.com',displayName:'Client'};await api({action:'channels'},403);await api({action:'digestTest'},403);await api({action:'schedule',post_id:'p1'},403);user={userId:'owner',email:'owner@example.com',displayName:'Owner'};
 const ownerApi=createWorkspaceApi(env,user);
 async function reviewPost(id,format='Historia',who={userId:'client',email:'client@example.com',displayName:'Client'},preview=''){
  await addPost(id,'En revisión');await db.prepare('UPDATE posts SET format=? WHERE id=?').bind(format,id).run();
