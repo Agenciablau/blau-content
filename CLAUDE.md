@@ -18,7 +18,7 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 
 - `src/`: React 19 + TypeScript + Vite. `Planner.tsx` contiene casi toda la interfaz (vistas, barra lateral, modales). Componentes auxiliares: `ClientProfile*`, `MonthlyCommitments`, `Buffer*`, `CreativePreview`, `CarouselLinksEditor`, `DeleteClientConfirmation`.
 - `worker/`: Cloudflare Worker que sirve `dist/` y la API.
-  - `index.ts`: cabeceras de seguridad, comprobación de origen, autenticación y enrutado. Cron cada minuto → `processStoryQueue` y `sendDigests` (resúmenes por correo con Brevo a las 10:00 y 22:00 de Madrid, `email-digest.ts`).
+  - `index.ts`: cabeceras de seguridad, comprobación de origen, autenticación y enrutado. Cron cada minuto → `processStoryQueue` y `sendDigests` (resúmenes por correo con Brevo, `email-digest.ts`: equipo a las 10:00 y 22:00; clientes a las 10:00 y 16:00 de lunes a viernes y solo si tienen algo que aprobar o una respuesta).
   - `auth.ts`: verificación del JWT de Cloudflare Access (`Cf-Access-Jwt-Assertion`, RS256, emisor, audiencia, caducidad).
   - `workspace.ts`: `GET/POST /api/workspace` (acciones `init`, `import`, `client`, `deleteClient`, `member`, `removeMember`, `post`, `review`, `comment`, `delete`; `?export=1`, `?preview=<cliente>`). Aquí están los permisos y el aislamiento por cliente.
   - `integrations.ts`, `buffer-api.ts`, `drive-api.ts`: `/api/integrations/*`, Buffer, OAuth de Google Drive (solo lectura) y copias en R2.

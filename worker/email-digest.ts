@@ -1,9 +1,9 @@
 import type {Env} from './types';
-const hours=[10,22];
+export const schedule={team:[10,22],client:[10,16]};
 const esc=(s:any)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const at=(v:string)=>String(v??'').slice(0,24);
 const clip=(s:string,n=280)=>s.length>n?s.slice(0,n-1)+'…':s;
-export function madridSlot(now:Date){const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(now).map(x=>[x.type,x.value]));return {hour:Number(p.hour),slot:`${p.year}-${p.month}-${p.day} ${p.hour}:00`};}
+export function madridSlot(now:Date){const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23',weekday:'short'}).formatToParts(now).map(x=>[x.type,x.value]));return {hour:Number(p.hour),slot:`${p.year}-${p.month}-${p.day} ${p.hour}:00`,weekend:['Sat','Sun'].includes(p.weekday)};}
 type Kind='changes'|'approved'|'pending'|'updates'|'comments'|'replies';type Item={post:string;meta:string;quote?:string;by?:string;time?:string;pill?:string};type Section={kind:Kind;title:string;items:Item[]};type Group={client:string;color:string;sections:Section[]};
 const day=(d:string)=>d?d.slice(8,10)+'/'+d.slice(5,7):'';const meta=(p:any,...x:string[])=>[p.channel,p.format,day(p.date),...x].filter(Boolean).join(' · ');
 const clock=(t:string)=>new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(t));
@@ -53,7 +53,7 @@ export function renderDigest(groups:Group[],audience:'team'|'client',hour:number
 <tr><td style="background:#13dbfb"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${stats.map((s,n)=>cell(w,n===0,n===stats.length-1,s)).join('')}</tr></table></td></tr>
 ${groups.map((g,n)=>`<tr><td style="background:#ffffff;padding:${n?'8px':'30px'} 32px 8px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="${n?'border-top:1px solid #e3e9ee;padding-top:22px':''}"><tr><td style="font-size:20px;font-weight:800;color:#0f1d2e"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${/^#[0-9a-f]{3,8}$/i.test(g.color)?g.color:'#13dbfb'};margin-right:8px"></span>${esc(g.client)}</td><td align="right" style="font-size:12px;color:#5b6b7b">${(c=>c+' '+(c===1?'novedad':'novedades'))(g.sections.reduce((m,s)=>m+s.items.length,0))}</td></tr></table>${g.sections.map(block).join('')}</td></tr>`).join('')}
 <tr><td style="background:#ffffff;padding:28px 32px 34px;border-radius:0 0 18px 18px">${link?`<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#0f1d2e;border-radius:40px"><a href="${esc(link)}" style="display:inline-block;padding:15px 28px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none">${cta}&nbsp;&nbsp;<span style="color:#13dbfb">→</span></a></td></tr></table>`:''}<p style="margin:16px 0 0;font-size:13px;color:#5b6b7b;line-height:1.5">${foot}</p></td></tr>
-<tr><td style="padding:28px 32px;text-align:center"><p style="margin:0 0 6px;font-size:18px;font-weight:800;color:#0f1d2e;letter-spacing:-.4px">Contenido que se recuerda<span style="color:#13dbfb">.</span></p><p style="margin:0;font-size:12px;line-height:1.7;color:#5b6b7b">Blau · Desde Valencia, para todo el mundo<br><a href="mailto:hola@agenciablau.com" style="color:#003680">hola@agenciablau.com</a> · <a href="https://agenciablau.com" style="color:#003680">agenciablau.com</a></p><p style="margin:14px 0 0;font-size:11px;color:#8a98a6">Recibes este resumen a las 10:00 y a las 22:00 solo cuando hay novedades.</p></td></tr>
+<tr><td style="padding:28px 32px;text-align:center"><p style="margin:0 0 6px;font-size:18px;font-weight:800;color:#0f1d2e;letter-spacing:-.4px">Contenido que se recuerda<span style="color:#13dbfb">.</span></p><p style="margin:0;font-size:12px;line-height:1.7;color:#5b6b7b">Blau · Desde Valencia, para todo el mundo<br><a href="mailto:hola@agenciablau.com" style="color:#003680">hola@agenciablau.com</a> · <a href="https://agenciablau.com" style="color:#003680">agenciablau.com</a></p><p style="margin:14px 0 0;font-size:11px;color:#8a98a6">Recibes este resumen ${audience==='team'?'a las 10:00 y a las 22:00':'a las 10:00 y a las 16:00, de lunes a viernes,'} solo cuando hay novedades.</p></td></tr>
 </table></td></tr></table></body></html>`;
  const text=`${title}.\n${intro}\n\n`+groups.map(g=>`${g.client}\n`+g.sections.map(s=>`  ${s.title} (${s.items.length})\n`+s.items.map(i=>`  - ${i.post}${i.meta?' ('+i.meta+')':''}${i.by?' · '+i.by:''}${i.quote?': '+i.quote:''}`).join('\n')).join('\n')).join('\n\n')+(link?`\n\n${cta}: ${link}`:'')+'\n\nBlau · Contenido que se recuerda. · hola@agenciablau.com';
  return {html,text,count,summary};
@@ -64,19 +64,20 @@ async function send(env:Env,to:string,subject:string,body:{html:string;text:stri
 }
 export async function sendDigests(env:Env,now=new Date()):Promise<void>{
  const db=env.DB;if(!db||!env.BREVO_API_KEY||!env.EMAIL_FROM)return;
- const {hour,slot}=madridSlot(now);if(!hours.includes(hour))return;
+ const {hour,slot,weekend}=madridSlot(now),due=(['team','client'] as const).filter(a=>schedule[a].includes(hour)&&!(a==='client'&&weekend));if(!due.length)return;
  const w=await db.prepare('SELECT email FROM workspace WHERE id=1').first<any>();if(!w)return;
- const last=await db.prepare('SELECT window_to FROM email_digests ORDER BY window_to DESC LIMIT 1').first<any>();
- const to=now.toISOString(),from=last?.window_to??new Date(now.getTime()-12*3600e3).toISOString();
- const claim=await db.prepare('INSERT INTO email_digests(slot,window_from,window_to,created_at) VALUES(?,?,?,?) ON CONFLICT(slot) DO NOTHING').bind(slot,from,to,to).run();if(!claim.meta.changes)return;
- const [clients,posts,comments,reviews,members]=await Promise.all(['SELECT id,name,color FROM clients WHERE archived=0 ORDER BY name','SELECT id,client_id,title,channel,format,date,status,updated_at,client_changed_at FROM posts','SELECT post_id,author,body,created_at,role FROM comments WHERE created_at>? AND created_at<=?','SELECT post_id,actor,role,decision,created_at FROM reviews','SELECT email,role,client_id FROM members'].map((q,i)=>(i===2?db.prepare(q).bind(from,to):db.prepare(q)).all<any>().then(r=>r.results)));
- const link=env.APP_ORIGIN??'',errors:string[]=[];let sent=0;
- const out=async(email:string,groups:Group[],audience:'team'|'client')=>{if(!groups.length)return;const body=renderDigest(groups,audience,hour,link);try{await send(env,email,`Blau · ${body.summary.charAt(0).toUpperCase()+body.summary.slice(1)}`,body);sent++;}catch(e){errors.push(email+': '+(e instanceof Error?e.message:'error'));}};
- const team=[...new Set([w.email,...members.filter((m:any)=>m.role==='team').map((m:any)=>m.email)].map((e:string)=>e.toLowerCase()))];
- const teamGroups=teamDigest(clients,posts,comments,reviews,from,to);
- for(const email of team)await out(email,teamGroups,'team');
- for(const c of clients){const groups=clientDigest(c,posts,comments,reviews,from,to);if(groups.length)for(const m of members.filter((m:any)=>m.role==='client'&&m.client_id===c.id))await out(m.email,groups,'client');}
- await db.prepare('UPDATE email_digests SET sent=?,error=? WHERE slot=?').bind(sent,errors.join('; ').slice(0,2000),slot).run();
+ const link=env.APP_ORIGIN??'',to=now.toISOString();
+ for(const audience of due){
+  const key=audience+':'+slot,last=await db.prepare('SELECT window_to FROM email_digests WHERE slot LIKE ? ORDER BY window_to DESC LIMIT 1').bind(audience+':%').first<any>();
+  const from=last?.window_to??new Date(now.getTime()-12*3600e3).toISOString();
+  const claim=await db.prepare('INSERT INTO email_digests(slot,window_from,window_to,created_at) VALUES(?,?,?,?) ON CONFLICT(slot) DO NOTHING').bind(key,from,to,to).run();if(!claim.meta.changes)continue;
+  const [clients,posts,comments,reviews,members]=await Promise.all(['SELECT id,name,color FROM clients WHERE archived=0 ORDER BY name','SELECT id,client_id,title,channel,format,date,status,updated_at,client_changed_at FROM posts','SELECT post_id,author,body,created_at,role FROM comments WHERE created_at>? AND created_at<=?','SELECT post_id,actor,role,decision,created_at FROM reviews','SELECT email,role,client_id FROM members'].map((q,i)=>(i===2?db.prepare(q).bind(from,to):db.prepare(q)).all<any>().then(r=>r.results)));
+  const errors:string[]=[];let sent=0;
+  const out=async(email:string,groups:Group[])=>{const body=renderDigest(groups,audience,hour,link);try{await send(env,email,`Blau · ${body.summary.charAt(0).toUpperCase()+body.summary.slice(1)}`,body);sent++;}catch(e){errors.push(email+': '+(e instanceof Error?e.message:'error'));}};
+  if(audience==='team'){const groups=teamDigest(clients,posts,comments,reviews,from,to);if(groups.length)for(const email of [...new Set([w.email,...members.filter((m:any)=>m.role==='team').map((m:any)=>m.email)].map((e:string)=>e.toLowerCase()))])await out(email,groups);}
+  else for(const c of clients){const groups=clientDigest(c,posts,comments,reviews,from,to);if(groups.some(g=>g.sections.some(s=>s.kind==='pending'||s.kind==='replies')))for(const m of members.filter((m:any)=>m.role==='client'&&m.client_id===c.id))await out(m.email,groups);}
+  await db.prepare('UPDATE email_digests SET sent=?,error=? WHERE slot=?').bind(sent,errors.join('; ').slice(0,2000),key).run();
+ }
 }
 export async function sendDigestTest(env:Env,email:string){
  if(!env.BREVO_API_KEY||!env.EMAIL_FROM)throw new Error('Configura BREVO_API_KEY y EMAIL_FROM en Cloudflare.');
