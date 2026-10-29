@@ -3,7 +3,7 @@ import {createWorkspaceApi} from './workspace';
 import type {Env} from './types';
 import {integrationApi,processStoryQueue} from './integrations';
 import {sendDigests} from './email-digest';
-function security(response:Response){const h=new Headers(response.headers);h.set('Cache-Control','no-store');h.set('X-Content-Type-Options','nosniff');h.set('Referrer-Policy','same-origin');h.set('X-Frame-Options','DENY');h.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-src https://drive.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");return new Response(response.body,{status:response.status,headers:h});}
+function security(response:Response){const h=new Headers(response.headers);h.set('Cache-Control','no-store');h.set('X-Content-Type-Options','nosniff');h.set('Referrer-Policy','same-origin');h.set('X-Frame-Options','DENY');h.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://drive.google.com https://*.googleusercontent.com; connect-src 'self'; font-src 'self'; frame-src https://drive.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");return new Response(response.body,{status:response.status,headers:h});}
 export default {
  async scheduled(_controller:ScheduledController,env:Env){await Promise.allSettled([processStoryQueue(env),sendDigests(env)]);},
  async fetch(request:Request,env:Env):Promise<Response>{
