@@ -20,7 +20,7 @@ async function context(){
 async function GET(req?:Request){
  const c=await context(); if(!c)return fail('Inicia sesión para acceder.',401);
  if(!c.w&&c.user.email!==env.ADMIN_EMAIL?.trim().toLowerCase())return fail('El administrador debe configurar el espacio primero.',403);
- if(!c.w)return Response.json({needsSetup:true,user:c.user.displayName,clients:[],posts:[],comments:[],members:[],role:'owner'});
+ if(!c.w)return Response.json({needsSetup:true,user:c.user.displayName,clients:[],posts:[],comments:[],members:[],keyDates:[],role:'owner'});
  if(c.role==='none')return fail('Tu cuenta no tiene acceso a este espacio. Pide al administrador que añada tu correo.',403);
  const preview=req?new URL(req.url).searchParams.get('preview'):null;
  if(preview){
@@ -33,22 +33,23 @@ async function GET(req?:Request){
  if(req&&new URL(req.url).searchParams.get('export')==='1'){
   if(c.role!=='owner')return fail('Solo el administrador puede exportar.',403);
   const backup:any={exported_at:new Date().toISOString(),version:1};
-  for(const table of ['clients','posts','comments','reviews','members'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
+  for(const table of ['clients','posts','comments','reviews','members','key_dates'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
   backup.owner_name=c.w.owner_name??'';
   return Response.json(backup,{headers:{'Cache-Control':'no-store','Content-Disposition':'attachment; filename=blau-content-backup.json'}});
  }
  const cl=await c.db.prepare(scoped?'SELECT * FROM clients WHERE id=?':'SELECT * FROM clients ORDER BY name').bind(...(scoped?[c.clientId]:[])).all();
  const p=await c.db.prepare(client?"SELECT * FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador') ORDER BY date":scoped?"SELECT * FROM posts WHERE client_id=? ORDER BY date":"SELECT * FROM posts ORDER BY date").bind(...(scoped?[c.clientId]:[])).all();
  const scope=client?" WHERE post_id IN (SELECT id FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador'))":scoped?" WHERE post_id IN (SELECT id FROM posts WHERE client_id=?)":'';
- const commentScope=scope+(scoped?' AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=comments.post_id)':'');
+ const commentScope=scope+(scoped?' AND internal=0 AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=comments.post_id)':'');
  const reviewScope=scope+(scoped?' AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=reviews.post_id)':'');
  const co=await c.db.prepare('SELECT * FROM comments'+commentScope+' ORDER BY created_at, rowid').bind(...(scoped?[c.clientId]:[])).all();
  const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+reviewScope+' ORDER BY created_at DESC').bind(...(scoped?[c.clientId]:[])).all();
  const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id,name FROM members WHERE role IN ('client','collaborator') ORDER BY email").all():{results:[]};
  const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?" WHERE client_id=? AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))":scoped?" WHERE client_id=?":'')).bind(...(scoped?[c.clientId]:[])).all();
+ const keyDates=await c.db.prepare('SELECT id,client_id,date,title,yearly FROM key_dates'+(scoped?' WHERE client_id IS NULL OR client_id=?':'')+' ORDER BY date').bind(...(scoped?[c.clientId]:[])).all();
  const names=new Map<string,string>((await c.db.prepare("SELECT email,name FROM members WHERE name<>''").all<any>()).results.map((r:any)=>[r.email,r.name]));if(c.w.owner_name)names.set(c.w.email,c.w.owner_name);
  const named=(v:string)=>names.get(String(v??'').toLowerCase())||v;
- return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author)})),members:m.results,reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)}))},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author)})),members:m.results,reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
 async function POST(req:Request){
@@ -96,9 +97,10 @@ async function POST(req:Request){
    c.db.prepare(`DELETE FROM posts WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM members WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM buffer_bindings WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
+   c.db.prepare(`DELETE FROM key_dates WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM clients WHERE id=? AND name=? AND ${guard}`).bind(id,current.name,id,current.name)
   ]);
-  if(!results[7].meta.changes)return fail('El cliente ha cambiado o tiene un envío nuevo. Vuelve a abrir su ficha antes de eliminarlo.',409);
+  if(!results[8].meta.changes)return fail('El cliente ha cambiado o tiene un envío nuevo. Vuelve a abrir su ficha antes de eliminarlo.',409);
   try{if(cleanupKeys.length){if(!env.MEDIA)throw Error('R2 no disponible');await env.MEDIA.delete(cleanupKeys);}await c.db.prepare('DELETE FROM media_cleanup WHERE id=?').bind(cleanupId).run();}catch{/* Keep the cleanup queue for the administrator; the database deletion succeeded. */}
  }else if(b.action==='client'){
   if(!staff)return fail('Solo el equipo puede gestionar clientes.',403);
@@ -124,6 +126,16 @@ async function POST(req:Request){
  }else if(b.action==='ownerName'){
   if(c.role!=='owner')return fail('Sin permiso.',403);
   await c.db.prepare('UPDATE workspace SET owner_name=? WHERE id=1').bind(str(b.name,80)).run();
+ }else if(b.action==='keyDate'){
+  if(!staff)return fail('Solo el equipo puede gestionar las fechas clave.',403);
+  const title=str(b.title,80),date=str(b.date,10),cid=str(b.client_id,100)||null;
+  if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(date)||new Date(date+'T00:00Z').toISOString().slice(0,10)!==date)return fail('Indica un nombre y una fecha válida.');
+  if(cid&&!await c.db.prepare('SELECT id FROM clients WHERE id=?').bind(cid).first())return fail('Cliente no encontrado.',404);
+  if(b.id){const r=await c.db.prepare('UPDATE key_dates SET title=?,date=?,client_id=?,yearly=? WHERE id=?').bind(title,date,cid,b.yearly?1:0,str(b.id,100)).run();if(!r.meta.changes)return fail('Fecha no encontrada.',404);}
+  else await c.db.prepare('INSERT INTO key_dates(id,client_id,date,title,yearly,created_at) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),cid,date,title,b.yearly?1:0,new Date().toISOString()).run();
+ }else if(b.action==='deleteKeyDate'){
+  if(!staff)return fail('Solo el equipo puede gestionar las fechas clave.',403);
+  const r=await c.db.prepare('DELETE FROM key_dates WHERE id=?').bind(str(b.id,100)).run();if(!r.meta.changes)return fail('Fecha no encontrada.',404);
  }else if(b.action==='removeMember'){
   if(c.role!=='owner')return fail('Sin permiso.',403);
   await c.db.prepare('DELETE FROM members WHERE email=?').bind(str(b.email,254).toLowerCase()).run();
@@ -135,8 +147,8 @@ async function POST(req:Request){
   if(existing&&['post','review'].includes(b.action)&&existing.updated_at!==b.updated_at)return fail('La publicación ha cambiado. Actualiza antes de continuar.',409);
   if(existing&&c.role==='client'&&(existing.client_id!==c.clientId||['Idea','Borrador'].includes(existing.status)))return fail('Sin permiso.',403);
   if(b.action==='comment'){
-   const body=str(b.body);if(!body)return fail('Escribe un comentario.');
-   const result=await c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved) SELECT ?,?,?,?,?,?,0 WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND client_id=? AND client_changed_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,body,new Date().toISOString(),c.role==='client'&&!preview?'client':'team',existing.id,existing.client_id,existing.client_changed_at??'').run();if(!result.meta.changes)return fail('La publicación ha cambiado de cliente. Actualiza antes de comentar.',409);
+   const body=str(b.body),internal=b.internal===true;if(!body)return fail('Escribe un comentario.');if(internal&&!staff)return fail('Solo el equipo puede dejar notas internas.',403);
+   const result=await c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved,internal) SELECT ?,?,?,?,?,?,0,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND client_id=? AND client_changed_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,body,new Date().toISOString(),c.role==='client'&&!preview?'client':'team',internal?1:0,existing.id,existing.client_id,existing.client_changed_at??'').run();if(!result.meta.changes)return fail('La publicación ha cambiado de cliente. Actualiza antes de comentar.',409);
   }else if(b.action==='review'){
    if(collaborator)return fail('La aprobación corresponde al cliente.',403);
    if(!['Aprobado','Cambios solicitados'].includes(b.status)||existing.status!=='En revisión')return fail('Solo se pueden revisar publicaciones pendientes.');

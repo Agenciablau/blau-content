@@ -20,7 +20,7 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 - `worker/`: Cloudflare Worker que sirve `dist/` y la API.
   - `index.ts`: cabeceras de seguridad, comprobación de origen, autenticación y enrutado. Cron cada minuto → `processStoryQueue` y `sendDigests` (resúmenes por correo con Brevo, `email-digest.ts`: equipo a las 10:00 y 22:00; clientes a las 10:00 y 16:00 de lunes a viernes y solo si tienen algo que aprobar o una respuesta).
   - `auth.ts`: verificación del JWT de Cloudflare Access (`Cf-Access-Jwt-Assertion`, RS256, emisor, audiencia, caducidad).
-  - `workspace.ts`: `GET/POST /api/workspace` (acciones `init`, `import`, `client`, `deleteClient`, `member`, `removeMember`, `post`, `review`, `comment`, `delete`; `?export=1`, `?preview=<cliente>`). Aquí están los permisos y el aislamiento por cliente.
+  - `workspace.ts`: `GET/POST /api/workspace` (acciones `init`, `import`, `client`, `deleteClient`, `member`, `removeMember`, `post`, `review`, `comment`, `delete`, `keyDate`, `deleteKeyDate`; `?export=1`, `?preview=<cliente>`). Aquí están los permisos y el aislamiento por cliente.
   - `integrations.ts`, `buffer-api.ts`, `drive-api.ts`: `/api/integrations/*`, Buffer, OAuth de Google Drive (solo lectura) y copias en R2.
   - `import-backup.ts`: importación JSON (versión 1) en espacio vacío, atómica, máximo 4.000 registros.
 - `shared/`: lógica común de cliente y Worker (`client-profile.ts`, `monthly-commitments.ts`, `buffer-scheduling.ts`, `material-links.ts`).
@@ -32,6 +32,8 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 - Roles: `owner` (administrador = `ADMIN_EMAIL`/propietario del espacio), `team`, `client`, `collaborator`, guardados en `members`.
 - `client` y `collaborator` solo ven su marca. `client` no ve Idea ni Borrador.
 - Clientes y colaboradores solo ven comentarios y revisiones posteriores a `posts.client_changed_at`.
+- Las notas internas (`comments.internal=1`) solo las escriben y ven `owner` y `team`; el Worker las excluye para cliente, colaborador, vista previa y resúmenes de correo.
+- Fechas clave (`key_dates`): solo `owner` y `team` las gestionan; cliente y colaborador ven las globales (`client_id` nulo) y las de su marca. Los días señalados genéricos están en `shared/key-dates.ts`.
 - `profile.drive_folder_url` se elimina de la respuesta para quien no sea `owner`; solo `owner` lo edita.
 - Solo `owner` cambia compromisos mensuales, gestiona accesos, exporta, importa, elimina clientes y reasigna publicaciones.
 - `collaborator` crea, edita y envía a revisión en su marca, y comenta; no aprueba, no solicita cambios, no elimina.
