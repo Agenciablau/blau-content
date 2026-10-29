@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const sql=new DatabaseSync(':memory:');
-for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
+for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql','0008_key_dates_internal_notes.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{
  constructor(q,args=[]){this.q=q;this.args=args;}
  bind(...args){return new Statement(this.q,args);}
@@ -295,3 +295,35 @@ assert.equal((await post({action:'member',email:'welcome@example.com',role:'coll
 assert.equal((await post({action:'welcome',email:'welcome@example.com'})).welcome,'sent');assert.equal(welcomes.at(-1).name,'Luis G.');await post({action:'welcome',email:'nobody@example.com'},404);
 identity={userId:'named',email:'named@example.com',displayName:'named@example.com'};await post({action:'welcome',email:'welcome@example.com'},403);identity={userId:'owner',email:'owner@example.com',displayName:'owner@example.com'};
 console.log('Passed: welcome email only for new accesses, owner-only resend and role/brand passed to the template.');
+
+// Internal notes: only owner and team write or read them.
+const as=(email,fn)=>async(...a)=>{const prev=identity;identity={userId:email,email,displayName:email};try{return await fn(...a);}finally{identity=prev;}};
+await post({action:'member',email:'team2@example.com',role:'team',name:'Marta'});await post({action:'member',email:'collab2@example.com',role:'collaborator',client_id:b.id});
+await post({action:'comment',id:moving.id,body:'Nota secreta del admin',internal:true});await as('team2@example.com',post)({action:'comment',id:moving.id,body:'Nota secreta del equipo',internal:true});
+assert.equal(sql.prepare("SELECT internal FROM comments WHERE body='Nota secreta del admin'").get().internal,1);assert.equal(sql.prepare("SELECT internal FROM comments WHERE body='Comentario con nombre'").get().internal,0);
+assert.ok((await get()).comments.some(c=>c.body==='Nota secreta del equipo'&&c.internal===1));assert.ok((await as('team2@example.com',get)()).comments.some(c=>c.body==='Nota secreta del admin'));
+for(const email of ['named@example.com','collab2@example.com']){const view=await as(email,get)();assert.ok(view.comments.length>0);assert.ok(!view.comments.some(c=>c.internal),email);await as(email,post)({action:'comment',id:moving.id,body:'Intento',internal:true},403);}
+assert.ok(!(await get(200,b.id)).comments.some(c=>c.internal),'preview hides internal notes');
+const internalPreview=await api.POST(new Request('https://test.local/api/workspace?preview='+b.id,{method:'POST',headers:{'Content-Type':'application/json','Origin':'https://test.local'},body:JSON.stringify({action:'comment',id:moving.id,body:'Desde vista previa',internal:true})}));assert.equal(internalPreview.status,403);
+assert.equal(sql.prepare("SELECT COUNT(*) n FROM comments WHERE body IN ('Intento','Desde vista previa')").get().n,0);
+console.log('Passed: internal notes written by owner and team, hidden from clients, collaborators and client preview.');
+// Key dates: staff manage them, scoped roles see global dates and their brand only.
+await post({action:'keyDate',title:'Aniversario agencia',date:'2026-11-20',yearly:true});await post({action:'keyDate',title:'Lanzamiento B',date:'2026-11-12',client_id:b.id});await as('team2@example.com',post)({action:'keyDate',title:'Feria A',date:'2026-11-05',client_id:a.id});
+await post({action:'keyDate',title:'Mal',date:'2026-02-30'},400);await post({action:'keyDate',title:'',date:'2026-02-01'},400);await post({action:'keyDate',title:'X',date:'2026-02-01',client_id:'nope'},404);
+let kd=(await get()).keyDates;assert.equal(kd.length,3);assert.equal(kd.find(k=>k.title==='Aniversario agencia').yearly,1);
+for(const email of ['named@example.com','collab2@example.com']){assert.deepEqual((await as(email,get)()).keyDates.map(k=>k.title).sort(),['Aniversario agencia','Lanzamiento B']);await as(email,post)({action:'keyDate',title:'No',date:'2026-11-01'},403);await as(email,post)({action:'deleteKeyDate',id:kd[0].id},403);}
+assert.deepEqual((await get(200,b.id)).keyDates.map(k=>k.title).sort(),['Aniversario agencia','Lanzamiento B']);
+const launch=kd.find(k=>k.title==='Lanzamiento B');await post({action:'keyDate',id:launch.id,title:'Lanzamiento B (nuevo)',date:'2026-11-13',client_id:b.id});assert.equal((await get()).keyDates.find(k=>k.id===launch.id).date,'2026-11-13');
+await post({action:'keyDate',id:'missing',title:'X',date:'2026-11-13'},404);await post({action:'deleteKeyDate',id:'missing'},404);
+const feria=kd.find(k=>k.title==='Feria A');await post({action:'deleteKeyDate',id:feria.id});await post({action:'keyDate',title:'Feria A',date:'2026-11-05',client_id:a.id});
+console.log('Passed: key dates created, edited and deleted by staff only, validated, and scoped to global plus own brand for clients, collaborators and preview.');
+// Backups keep internal notes and key dates.
+const fullBackup=await (await api.GET(new Request('https://test.local/api/workspace?export=1'))).json();assert.equal(fullBackup.key_dates.length,3);assert.ok(fullBackup.comments.some(c=>c.internal===1));
+await post({action:'import',backup:fullBackup},400);
+for(const t of ['reviews','comments','buffer_jobs','posts','members','key_dates','buffer_bindings','clients'])sql.exec(`DELETE FROM ${t}`);
+await post({action:'import',backup:fullBackup});
+assert.deepEqual(sql.prepare('SELECT id,client_id,date,title,yearly FROM key_dates ORDER BY id').all().map(r=>({...r})),fullBackup.key_dates.map(({created_at,...r})=>r).sort((x,y)=>x.id.localeCompare(y.id)));
+assert.equal(sql.prepare('SELECT COUNT(*) n FROM comments WHERE internal=1').get().n,fullBackup.comments.filter(c=>c.internal===1).length);
+assert.ok(!(await as('named@example.com',get)()).comments.some(c=>c.internal));
+const legacy={...fullBackup};delete legacy.key_dates;for(const t of ['reviews','comments','posts','members','key_dates','clients'])sql.exec(`DELETE FROM ${t}`);await post({action:'import',backup:legacy});assert.equal(sql.prepare('SELECT COUNT(*) n FROM key_dates').get().n,0);
+console.log('Passed: backups export and import internal notes and key dates, and older backups without key dates still import.');

@@ -359,3 +359,17 @@ body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-seri
 .range-notice,.no-comments{color:#3d4c5c!important}.form-note{color:#3d4c5c!important}
 @media(min-width:981px){.integration-connections{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .member-id{display:flex;flex-direction:column;gap:2px;min-width:0}.member-id b{font-weight:700;color:#0f1d2e}.member-id b+span{font-size:12px;color:#5b6b7b}
+/* Notas internas */
+.drawer-overlay .comments article.internal{background:#fff8e1;border-color:#f2d98a;border-style:dashed}.drawer-overlay .comments article.internal .avatar{background:#7a5100;display:grid;place-items:center}.drawer-overlay .comments article.internal .comment-role{background:#fdecb5;color:#6b4500}
+.note-mode{display:flex;gap:2px;margin-bottom:8px;width:max-content;max-width:100%}.note-mode button{display:inline-flex;align-items:center;gap:6px;padding:0 12px}
+.internal-form textarea{background:#fffbef;border-color:#f2d98a}.internal-form>label{color:#6b4500}
+/* Fechas clave */
+.key-date-controls{display:flex;gap:6px;flex-wrap:wrap}
+.key-toggle,.key-add{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border:1px solid var(--blau-line);border-radius:8px;background:#fff;color:#3d4c5c;font-size:13px;font-weight:600}
+.key-toggle.on{background:#e6fbff;border-color:#9fe9f7;color:#003680}.key-add{color:var(--blau-navy)}
+.key-date{display:flex;align-items:center;gap:5px;width:100%;margin:0 0 4px;padding:3px 6px;border:0;border-radius:5px;font-size:11px;font-weight:600;line-height:1.25;text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;background:#eef3f6;color:#3d4c5c}
+.key-date i{flex:none;width:7px;height:7px;border-radius:50%}
+.key-date.comercial{background:#fff0e8;color:#a3330a}.key-date.festivo{background:#eef3f6;color:#3d4c5c}.key-date.mundial{background:#e3f7ee;color:#0b6b4a}.key-date.propia{background:#e6fbff;color:#003680;box-shadow:inset 3px 0 0 #13dbfb}
+button.key-date{cursor:pointer}button.key-date:hover{filter:brightness(.97)}
+.key-date-modal .check-row{display:flex;flex-direction:row;align-items:center;gap:8px;font-weight:500}.key-date-modal .check-row input{width:18px;height:18px}
+.key-date-modal .form-actions .danger-btn{margin-right:auto}
