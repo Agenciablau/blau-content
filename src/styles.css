@@ -373,3 +373,12 @@ body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-seri
 button.key-date{cursor:pointer}button.key-date:hover{filter:brightness(.97)}
 .key-date-modal .check-row{display:flex;flex-direction:row;align-items:center;gap:8px;font-weight:500}.key-date-modal .check-row input{width:18px;height:18px}
 .key-date-modal .form-actions .danger-btn{margin-right:auto}
+/* Ficha de revisión con vista previa */
+.app-shell .review-card>div:first-child .review-tags{display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:center;gap:6px;max-width:100%;min-width:0}
+.review-type{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#3d4c5c;background:#eef3f6;border-radius:10px;padding:3px 8px;white-space:nowrap}
+.review-card .review-thumb{position:relative;width:100%;aspect-ratio:4/5;padding:0;border:0;border-radius:8px;overflow:hidden;cursor:pointer;background:#eaf8fc;color:#3d6b80}
+.review-card .review-thumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s}.review-card .review-thumb.has-image:hover img{transform:scale(1.02)}
+.review-card .review-thumb .thumb-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;height:100%;font-size:12px;font-weight:500}
+.thumb-badge{position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:10px;background:#0f1d2ecc;color:#fff;font-size:12px;font-weight:600}
+.thumb-play{position:absolute;inset:0;margin:auto;width:44px;height:44px;border-radius:50%;background:#0f1d2ecc;color:#fff;display:grid;place-items:center}
+.app-shell .review-card>div:first-child{flex-wrap:wrap;row-gap:8px}.app-shell .review-card>div:first-child .client-pill{flex:1 1 auto}.app-shell .review-card>div:first-child .review-tags{margin-left:auto;flex-wrap:nowrap}
