@@ -45,7 +45,7 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 - Concurrencia optimista: `updated_at` es una versión (`ISO:uuid`); las escrituras comparan la versión y devuelven 409 si cambió.
 - Reasignación: solo `owner`, publicación no publicada, cliente destino activo, sin ningún registro en `buffer_jobs` (cualquier estado). Pasa a Borrador (Idea sigue como Idea) y fija `client_changed_at`.
 - Revisión: solo desde «En revisión». Bloque con «Solicitar cambios» (requiere «Cambios necesarios») y «Aprobar». La conversación usa su propio campo y «Enviar comentario»; comentar no cambia el estado. Los dos campos son independientes.
-- Solo la aprobación real de un cliente en una Historia de Instagram encola un envío en Buffer.
+- Solo la aprobación real de un cliente en una publicación de Instagram (Historia, Reel, Imagen o Carrusel de 2 a 20 imágenes; `bufferFormats`) encola un envío en Buffer. Los Reels con `posts.buffer_music=1` («Añadir música en Buffer») se crean en Buffer como borrador (`saveToDraft`) para elegir la música allí; los demás se programan con el audio del vídeo.
 - Contador de compromisos: cuenta por fecha del mes todas las publicaciones con fecha (cualquier estado), sin depender de los filtros visuales. Feed = Reel, Carrusel e Imagen de Instagram; Historias aparte; el exceso de un cliente no compensa a otro.
 - Las copias de seguridad deben conservar `client_changed_at`, roles y resolución de comentarios. Si añades columnas, actualiza exportación, `import-backup.ts` y las pruebas.
 
