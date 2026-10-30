@@ -70,7 +70,7 @@ export async function integrationApi(request:Request,env:Env,user:User):Promise<
    if(body.action==='reset'){
     if(!['error','cancelled'].includes(job.state))return fail('No repitas un envío activo o sin confirmar.',409);
     const assets=JSON.parse(job.assets);if(assets.length){if(!env.MEDIA)return fail('Conecta R2 para limpiar el intento anterior.');await env.MEDIA.delete(assets.map((a:any)=>a.key));}
-    if(post.channel!=='Instagram'||post.format!=='Historia'||post.status!=='Aprobado')return fail('Solo se pueden reintentar historias aprobadas.');await db.prepare("UPDATE buffer_jobs SET state='queued',assets='[]',remote_id=NULL,error='',snapshot=?,updated_at=? WHERE post_id=? AND state IN ('error','cancelled')").bind(JSON.stringify({approvedVersion:post.updated_at}),stamp(),post.id).run();return Response.json({ok:true});
+    if(post.channel!=='Instagram'||!['Historia','Reel'].includes(post.format)||post.status!=='Aprobado')return fail('Solo se pueden reintentar historias y reels aprobados.');await db.prepare("UPDATE buffer_jobs SET state='queued',assets='[]',remote_id=NULL,error='',snapshot=?,updated_at=? WHERE post_id=? AND state IN ('error','cancelled')").bind(JSON.stringify({approvedVersion:post.updated_at}),stamp(),post.id).run();return Response.json({ok:true});
    }
    if(body.action==='confirmPublished'){
     if(job.state!=='notification_sent')return fail('Solo confirma historias publicadas después del aviso al móvil.');
@@ -101,17 +101,17 @@ export async function integrationApi(request:Request,env:Env,user:User):Promise<
 
 async function scheduleStory(env:Env,post:any,client:any,job:any,body:any):Promise<Response>{
  const db=env.DB!;
-  if(client.archived||post.status!=='Aprobado'||post.channel!=='Instagram'||post.format!=='Historia')return fail('Solo las historias aprobadas de Instagram se envían a Buffer.');
+  if(client.archived||post.status!=='Aprobado'||post.channel!=='Instagram'||!['Historia','Reel'].includes(post.format))return fail('Solo las historias y los reels aprobados de Instagram se envían a Buffer.');
   if(body.updated_at!==post.updated_at)return fail('La publicación cambió. Actualiza antes de enviarla.',409);
   if(job&&job.state!=='queued')return fail('Esta publicación ya tiene un envío registrado. Revisa su estado para evitar duplicados.',409);
-  if(body.mode!=='automatic')return fail('Las historias se programan con publicación automática.');
+  if(body.mode!=='automatic')return fail('Las historias y los reels se programan con publicación automática.');
   if(!env.BUFFER_API_KEY||!env.MEDIA||!driveConfigured(env))return fail('Configura Buffer, Drive y R2 antes de programar.');mediaOrigin(env);
   const binding=await db.prepare('SELECT * FROM buffer_bindings WHERE client_id=?').bind(client.id).first<any>();if(!binding)return fail('Vincula la cuenta de Instagram de este cliente.');
   const channelData=await bufferQuery(env,'query($input:ChannelInput!){channel(input:$input){id service isDisconnected isQueuePaused hasActiveMemberDevice}}',{input:{id:binding.channel_id}}),channel=channelData.channel;if(!channel||channel.service!=='instagram'||channel.isDisconnected||channel.isQueuePaused)return fail('La cuenta está desconectada o su cola está pausada en Buffer.');if(body.mode==='notification'&&!channel.hasActiveMemberDevice)return fail('Configura los avisos en la app móvil de Buffer para esta cuenta.');
   const dueAt=madridToUtc(post.date);if(Date.parse(dueAt)<=Date.now()+120000)return fail('Elige una fecha al menos dos minutos posterior a la hora actual.');
-  const links=materialLinks(post.asset);if(links.length!==1)return fail('Añade un único archivo de imagen o vídeo para la historia.');
-  const input:any={channelId:binding.channel_id,dueAt,mode:'customScheduled',schedulingType:body.mode,needsApproval:false,text:post.format==='Historia'&&body.mode==='automatic'?'':post.copy,assets:[],metadata:{instagram:{type:post.format==='Historia'?'story':post.format==='Reel'?'reel':'post',shouldShareToFeed:post.format==='Reel',...(post.format==='Historia'&&body.mode==='notification'?{stickerFields:{text:post.copy}}:{})}}};
-  const now=stamp();const claim=await db.prepare("UPDATE buffer_jobs SET state='preparing',snapshot=?,updated_at=? WHERE post_id=? AND state='queued' AND EXISTS(SELECT 1 FROM posts WHERE id=buffer_jobs.post_id AND updated_at=? AND status='Aprobado') AND EXISTS(SELECT 1 FROM clients WHERE id=buffer_jobs.client_id AND archived=0) AND EXISTS(SELECT 1 FROM buffer_bindings WHERE client_id=buffer_jobs.client_id AND channel_id=?)").bind(JSON.stringify(input),now,post.id,post.updated_at,binding.channel_id).run();if(!claim.meta.changes)return fail('Esta historia ya está siendo enviada o ha cambiado.',409);
+  const links=materialLinks(post.asset);if(links.length!==1)return fail(post.format==='Reel'?'Añade un único archivo de vídeo MP4 para el reel.':'Añade un único archivo de imagen o vídeo para la historia.');
+  const input:any={channelId:binding.channel_id,dueAt,mode:'customScheduled',schedulingType:body.mode,needsApproval:false,...(post.format==='Reel'&&post.buffer_music?{saveToDraft:true}:{}),text:post.format==='Historia'&&body.mode==='automatic'?'':post.copy,assets:[],metadata:{instagram:{type:post.format==='Historia'?'story':post.format==='Reel'?'reel':'post',shouldShareToFeed:post.format==='Reel',...(post.format==='Historia'&&body.mode==='notification'?{stickerFields:{text:post.copy}}:{})}}};
+  const now=stamp();const claim=await db.prepare("UPDATE buffer_jobs SET state='preparing',snapshot=?,updated_at=? WHERE post_id=? AND state='queued' AND EXISTS(SELECT 1 FROM posts WHERE id=buffer_jobs.post_id AND updated_at=? AND status='Aprobado') AND EXISTS(SELECT 1 FROM clients WHERE id=buffer_jobs.client_id AND archived=0) AND EXISTS(SELECT 1 FROM buffer_bindings WHERE client_id=buffer_jobs.client_id AND channel_id=?)").bind(JSON.stringify(input),now,post.id,post.updated_at,binding.channel_id).run();if(!claim.meta.changes)return fail('Esta publicación ya está siendo enviada o ha cambiado.',409);
   const assets:any[]=[];let sending=false;
   try{
    const token=await driveAccessToken(env);
@@ -134,11 +134,11 @@ export async function processStoryQueue(env:Env):Promise<void>{
  const job=await db.prepare("SELECT * FROM buffer_jobs WHERE state='queued' ORDER BY created_at LIMIT 1").first<any>();if(!job)return;
  const post=await db.prepare('SELECT * FROM posts WHERE id=?').bind(job.post_id).first<any>();
  const snapshot=JSON.parse(job.snapshot);
- if(!post||post.updated_at!==snapshot.approvedVersion||post.status!=='Aprobado'||post.channel!=='Instagram'||post.format!=='Historia'){
-  await db.prepare("UPDATE buffer_jobs SET state='error',error=?,updated_at=? WHERE post_id=? AND state='queued'").bind('La historia cambió después de aprobarse. Solicita una nueva revisión.',stamp(),job.post_id).run();return;
+ if(!post||post.updated_at!==snapshot.approvedVersion||post.status!=='Aprobado'||post.channel!=='Instagram'||!['Historia','Reel'].includes(post.format)){
+  await db.prepare("UPDATE buffer_jobs SET state='error',error=?,updated_at=? WHERE post_id=? AND state='queued'").bind('La publicación cambió después de aprobarse. Solicita una nueva revisión.',stamp(),job.post_id).run();return;
  }
  const client=await db.prepare('SELECT id,archived FROM clients WHERE id=?').bind(post.client_id).first<any>();
  let response:Response;
- try{response=await scheduleStory(env,post,client,job,{mode:'automatic',updated_at:post.updated_at});}catch(e){response=fail(e instanceof Error?e.message:'No se pudo programar la historia.');}
+ try{response=await scheduleStory(env,post,client,job,{mode:'automatic',updated_at:post.updated_at});}catch(e){response=fail(e instanceof Error?e.message:'No se pudo programar la publicación.');}
  if(!response.ok){const data:any=await response.json();await db.prepare("UPDATE buffer_jobs SET state='error',error=?,updated_at=? WHERE post_id=? AND state='queued'").bind(data.error,stamp(),post.id).run();}
 }

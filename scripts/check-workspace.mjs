@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const sql=new DatabaseSync(':memory:');
-for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql','0008_key_dates_internal_notes.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
+for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql','0008_key_dates_internal_notes.sql','0009_reel_buffer_music.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{
  constructor(q,args=[]){this.q=q;this.args=args;}
  bind(...args){return new Statement(this.q,args);}
@@ -98,6 +98,7 @@ await post({action:'review',id:p.id,updated_at:p.updated_at,status:'Cambios soli
 await post({action:'review',id:p.id,updated_at:p.updated_at,status:'Aprobado',body:'Perfecto'});
 data=await get();assert.equal(data.posts[0].status,'Aprobado');assert.equal(data.comments.length,1);assert.equal(data.reviews.length,1);assert.equal(data.reviews[0].role,'client');assert.equal(JSON.parse(data.reviews[0].snapshot).copy,'Copy original');
 await post({action:'delete',id:p.id},403);
+assert.equal(sql.prepare('SELECT state FROM buffer_jobs WHERE post_id=?').get(p.id).state,'queued','client-approved reels are queued for Buffer');sql.prepare('DELETE FROM buffer_jobs WHERE post_id=?').run(p.id);
 identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
 p=(await get()).posts.find(x=>x.id===p.id);
 await post({...p,action:'post',copy:'Copy modificado',status:'Planificado'});
@@ -327,3 +328,11 @@ assert.equal(sql.prepare('SELECT COUNT(*) n FROM comments WHERE internal=1').get
 assert.ok(!(await as('named@example.com',get)()).comments.some(c=>c.internal));
 const legacy={...fullBackup};delete legacy.key_dates;for(const t of ['reviews','comments','posts','members','key_dates','clients'])sql.exec(`DELETE FROM ${t}`);await post({action:'import',backup:legacy});assert.equal(sql.prepare('SELECT COUNT(*) n FROM key_dates').get().n,0);
 console.log('Passed: backups export and import internal notes and key dates, and older backups without key dates still import.');
+// The Buffer music option only applies to Instagram reels and survives backups.
+await post({action:'client',name:'Música',color:'#123456'});const musicClient=(await get()).clients.find(c=>c.name==='Música');
+await post({action:'post',client_id:musicClient.id,title:'Reel sin música',copy:'',channel:'Instagram',format:'Reel',date:'2030-01-10T10:00',status:'Borrador',asset:'',buffer_music:1});
+await post({action:'post',client_id:musicClient.id,title:'Historia con música',copy:'',channel:'Instagram',format:'Historia',date:'2030-01-10T10:00',status:'Borrador',asset:'',buffer_music:1});
+let musicPosts=(await get()).posts.filter(p=>p.client_id===musicClient.id);assert.equal(musicPosts.find(p=>p.title==='Reel sin música').buffer_music,1);assert.equal(musicPosts.find(p=>p.title==='Historia con música').buffer_music,0);
+const musicReel=musicPosts.find(p=>p.title==='Reel sin música');await post({...musicReel,action:'post',buffer_music:0});assert.equal((await get()).posts.find(p=>p.id===musicReel.id).buffer_music,0);await post({...musicReel,action:'post',updated_at:(await get()).posts.find(p=>p.id===musicReel.id).updated_at,buffer_music:1});
+const musicBackup=await (await api.GET(new Request('https://test.local/api/workspace?export=1'))).json();for(const t of ['reviews','comments','buffer_jobs','posts','members','key_dates','buffer_bindings','clients'])sql.exec(`DELETE FROM ${t}`);await post({action:'import',backup:musicBackup});assert.equal(sql.prepare('SELECT buffer_music FROM posts WHERE id=?').get(musicReel.id).buffer_music,1);
+console.log('Passed: Buffer music option stored only for Instagram reels and kept in backups.');
