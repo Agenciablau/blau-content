@@ -1,4 +1,6 @@
 export const bufferFormats=['Historia','Reel','Imagen','Carrusel'];
+export const bufferNetworks:Record<string,{service:string;formats:string[]}>={Instagram:{service:'instagram',formats:bufferFormats},LinkedIn:{service:'linkedin',formats:['Imagen','Carrusel','Vídeo']}};
+export const sendsToBuffer=(channel:string,format:string)=>!!bufferNetworks[channel]?.formats.includes(format);
 export const lockedBufferStates=['queued','preparing','sending','unknown','scheduled','draft','needs_approval','notification_sent','remote_error'];
 export function madridToUtc(value:string):string{
  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))throw Error('Introduce una fecha y hora válidas.');

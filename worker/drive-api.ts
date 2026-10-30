@@ -29,8 +29,8 @@ export function mediaOrigin(env:Env){const url=new URL(env.R2_PUBLIC_ORIGIN??'')
 export async function copyDriveFile(env:Env,link:string,token:string){
  const preview=drivePreviewUrl(link);if(!preview)throw Error('Para enviar a Buffer utiliza enlaces a archivos individuales de Drive.');const parsed=new URL(preview),id=parsed.pathname.split('/')[3];const headers:Record<string,string>={Authorization:`Bearer ${token}`};const resourceKey=parsed.searchParams.get('resourcekey');if(resourceKey&&!/^[A-Za-z0-9_-]+$/.test(resourceKey))throw Error('El enlace de Drive no es válido.');if(resourceKey)headers['X-Goog-Drive-Resource-Keys']=`${id}/${resourceKey}`;
  const base=`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`;
- const metadata=await fetch(base+'?supportsAllDrives=true&fields=id,name,mimeType,size,modifiedTime,capabilities(canDownload)',{headers,signal:AbortSignal.timeout(30000)});if(!metadata.ok)throw Error('No se puede leer un archivo de Drive. Comprueba el permiso de la cuenta conectada.');const meta:any=await metadata.json();const types:Record<string,string>={'image/jpeg':'jpg','image/png':'png','video/mp4':'mp4'};const size=Number(meta.size);
- if(!types[meta.mimeType]||meta.capabilities?.canDownload===false)throw Error('El material debe ser JPG, PNG o MP4 y permitir su descarga.');if(!size||size>200*1024*1024)throw Error('Cada archivo debe ocupar entre 1 byte y 200 MB.');
+ const metadata=await fetch(base+'?supportsAllDrives=true&fields=id,name,mimeType,size,modifiedTime,thumbnailLink,capabilities(canDownload)',{headers,signal:AbortSignal.timeout(30000)});if(!metadata.ok)throw Error('No se puede leer un archivo de Drive. Comprueba el permiso de la cuenta conectada.');const meta:any=await metadata.json();const types:Record<string,string>={'image/jpeg':'jpg','image/png':'png','video/mp4':'mp4','application/pdf':'pdf'};const size=Number(meta.size);
+ if(!types[meta.mimeType]||meta.capabilities?.canDownload===false)throw Error('El material debe ser JPG, PNG, MP4 o PDF y permitir su descarga.');if(!size||size>200*1024*1024)throw Error('Cada archivo debe ocupar entre 1 byte y 200 MB.');
  const r=await fetch(base+'?alt=media&supportsAllDrives=true',{headers,signal:AbortSignal.timeout(120000)});if(!r.ok||!r.body)throw Error('No se pudo descargar el archivo de Drive.');
  const objectKey='buffer/'+crypto.randomUUID()+'.'+types[meta.mimeType],origin=mediaOrigin(env);if(!env.MEDIA)throw Error('Conecta el almacenamiento R2.');
  const stream=new FixedLengthStream(size);
@@ -38,5 +38,11 @@ export async function copyDriveFile(env:Env,link:string,token:string){
   const check=await fetch(base+'?supportsAllDrives=true&fields=modifiedTime',{headers,signal:AbortSignal.timeout(30000)});if(!check.ok||(await check.json() as any).modifiedTime!==meta.modifiedTime)throw Error('El archivo cambió mientras se copiaba. Revisa su versión antes de enviarlo.');
   const publicCheck=await fetch(origin+'/'+objectKey,{method:'HEAD',redirect:'manual',signal:AbortSignal.timeout(15000)});if(!publicCheck.ok||!publicCheck.headers.get('Content-Type')?.startsWith(meta.mimeType))throw Error('La copia no es accesible para Buffer. Revisa el dominio público de R2 y sus permisos.');
  }catch(e){await env.MEDIA.delete(objectKey);throw e;}
- return {key:objectKey,url:origin+'/'+objectKey,mimeType:meta.mimeType};
+ let thumb:{key:string;url:string}|undefined;
+ if(meta.mimeType==='application/pdf'){const thumbKey='buffer/'+crypto.randomUUID()+'.jpg';try{
+  if(!meta.thumbnailLink)throw Error('Drive todavía no ha generado la portada del PDF. Inténtalo de nuevo en unos minutos.');
+  const t=await fetch(String(meta.thumbnailLink).replace(/=s\d+$/,'=s1200'),{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});const type=t.headers.get('Content-Type')??'';if(!t.ok||!type.startsWith('image/'))throw Error('No se pudo obtener la portada del PDF desde Drive.');
+  await env.MEDIA.put(thumbKey,await t.arrayBuffer(),{httpMetadata:{contentType:type,cacheControl:'public, max-age=3600'},customMetadata:{sourceId:id}});thumb={key:thumbKey,url:origin+'/'+thumbKey};
+ }catch(e){await env.MEDIA.delete([objectKey,thumbKey]);throw e;}}
+ return {key:objectKey,url:origin+'/'+objectKey,mimeType:meta.mimeType,thumb};
 }
