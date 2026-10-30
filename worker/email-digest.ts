@@ -1,4 +1,5 @@
 import type {Env} from './types';
+import {readClientProfile,autoApproveLabel} from '../shared/client-profile';
 export const schedule={team:[10,22],client:[10,16]};
 export const esc=(s:any)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const at=(v:string)=>String(v??'').slice(0,24);
@@ -10,22 +11,22 @@ const clock=(t:string)=>new Intl.DateTimeFormat('es-ES',{timeZone:'Europe/Madrid
 export function teamDigest(clients:any[],posts:any[],comments:any[],reviews:any[],from:string,to:string):Group[]{
  const inWin=(t:string)=>t>from&&t<=to,post=new Map(posts.map(p=>[p.id,p]));
  return clients.map(c=>{const mine=(x:any)=>post.get(x.post_id)?.client_id===c.id&&x.created_at>(post.get(x.post_id)?.client_changed_at??'');
-  const rv=reviews.filter(r=>r.role==='client'&&inWin(r.created_at)&&mine(r)),stamps=new Set(rv.map(r=>r.post_id+r.created_at));
+  const rv=reviews.filter(r=>['client','auto'].includes(r.role)&&inWin(r.created_at)&&mine(r)),stamps=new Set(rv.map(r=>r.post_id+r.created_at));
   const co=comments.filter(m=>m.role==='client'&&inWin(m.created_at)&&mine(m));
   const note=(r:any)=>co.find(m=>m.post_id===r.post_id&&m.created_at===r.created_at)?.body;
   const sections:Section[]=[
    {kind:'changes' as Kind,title:'Cambios solicitados',items:rv.filter(r=>r.decision==='Cambios solicitados').map(r=>({post:post.get(r.post_id).title,meta:meta(post.get(r.post_id),r.actor),quote:clip(note(r)??'')}))},
-   {kind:'approved' as Kind,title:'Aprobadas',items:rv.filter(r=>r.decision==='Aprobado').map(r=>({post:post.get(r.post_id).title,meta:meta(post.get(r.post_id),'por '+r.actor),pill:'✓ Aprobada'}))},
+   {kind:'approved' as Kind,title:'Aprobadas',items:rv.filter(r=>r.decision==='Aprobado').map(r=>({post:post.get(r.post_id).title,meta:meta(post.get(r.post_id),r.role==='auto'?'aprobada automáticamente, sin respuesta del cliente':'por '+r.actor),pill:'✓ Aprobada'}))},
    {kind:'comments' as Kind,title:'Comentarios nuevos',items:co.filter(m=>!stamps.has(m.post_id+m.created_at)).map(m=>({post:post.get(m.post_id).title,meta:'',by:m.author,time:clock(m.created_at),quote:clip(m.body)}))}].filter(s=>s.items.length);
   return {client:c.name,color:c.color,sections};}).filter(g=>g.sections.length);
 }
 export function clientDigest(client:any,posts:any[],comments:any[],reviews:any[],from:string,to:string):Group[]{
  const inWin=(t:string)=>t>from&&t<=to,visible=posts.filter(p=>p.client_id===client.id&&!['Idea','Borrador'].includes(p.status)),post=new Map(visible.map(p=>[p.id,p]));
- const byClient=new Set(reviews.filter(r=>r.role==='client').map(r=>r.post_id+r.created_at));
+ const byClient=new Set(reviews.filter(r=>r.role==='client').map(r=>r.post_id+r.created_at)),auto=readClientProfile(client.profile).auto_approve;
  const changed=visible.filter(p=>inWin(at(p.updated_at))&&!byClient.has(p.id+at(p.updated_at)));
  const co=comments.filter(m=>m.role==='team'&&post.has(m.post_id)&&inWin(m.created_at)&&m.created_at>(post.get(m.post_id).client_changed_at??''));
  const sections:Section[]=[
-  {kind:'pending' as Kind,title:'Pendientes de tu aprobación',items:changed.filter(p=>p.status==='En revisión').map(p=>({post:p.title,meta:meta(p),pill:'Por aprobar'}))},
+  {kind:'pending' as Kind,title:'Pendientes de tu aprobación',items:changed.filter(p=>p.status==='En revisión').map(p=>({post:p.title,meta:meta(p,...(auto&&autoApproveLabel(p.date)?[`se aprobará automáticamente el ${autoApproveLabel(p.date)} si no respondes`]:[])),pill:'Por aprobar'}))},
   {kind:'replies' as Kind,title:'Respuestas del equipo',items:co.map(m=>({post:post.get(m.post_id).title,meta:'',by:m.author,time:clock(m.created_at),quote:clip(m.body)}))},
   {kind:'updates' as Kind,title:'Otras actualizaciones',items:changed.filter(p=>p.status!=='En revisión').map(p=>({post:p.title,meta:meta(p),pill:p.status}))}].filter(s=>s.items.length);
  return sections.length?[{client:client.name,color:client.color,sections}]:[];
@@ -47,7 +48,7 @@ export function renderDigest(groups:Group[],audience:'team'|'client',hour:number
  const quote=(s:Section)=>s.items.map(i=>`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff4ef;border-left:4px solid ${tone[s.kind].color};border-radius:10px;margin-bottom:10px"><tr><td style="padding:16px 18px"><div style="font-size:15px;font-weight:700;color:#0f1d2e">${esc(i.post)}</div><div style="font-size:12px;color:#7a2a08;margin:3px 0 10px">${esc(i.meta)}</div><div style="font-size:14px;line-height:1.55;color:#3d4c5c">“${esc(i.quote)}”</div></td></tr></table>`).join('');
  const bubble=(s:Section)=>s.items.map(i=>`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px"><tr><td width="42" valign="top"><div style="width:32px;height:32px;line-height:32px;border-radius:50%;background:${tone[s.kind].color};color:#fff;text-align:center;font-weight:700;font-size:13px">${esc(String(i.by).slice(0,1).toUpperCase())}</div></td><td style="background:#f6f9fb;border-radius:4px 12px 12px 12px;padding:12px 16px"><div style="font-size:12px;color:#5b6b7b;margin-bottom:4px"><b style="color:#0f1d2e">${esc(i.by)}</b> en ${esc(i.post)} · ${esc(i.time)}</div><div style="font-size:14px;line-height:1.55;color:#3d4c5c">${esc(i.quote)}</div></td></tr></table>`).join('');
  const block=(s:Section)=>label(s)+(s.kind==='changes'?quote(s):s.kind==='comments'||s.kind==='replies'?bubble(s):list(s));
- const cta=audience==='client'&&pending?'Revisar publicaciones':'Abrir Blau Content',foot=audience==='team'?'Nada sale sin revisión. Responde desde la app y tu cliente lo verá en su próximo resumen.':'Nada sale sin tu revisión. Aprueba o pide cambios en un clic desde la app.';
+ const cta=audience==='client'&&pending?'Revisar publicaciones':'Abrir Blau Content',foot=audience==='team'?'Nada sale sin revisión. Responde desde la app y tu cliente lo verá en su próximo resumen.':'Aprueba o pide cambios en un clic desde la app.';
  const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blau Content</title></head><body style="margin:0;padding:0;background:#eef3f6;font-family:Helvetica,Arial,sans-serif;color:#0f1d2e"><div style="display:none;max-height:0;overflow:hidden">${esc(summary)}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f6"><tr><td align="center" style="padding:32px 14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
 <tr><td style="background:#0f1d2e;border-radius:18px 18px 0 0;padding:30px 32px 34px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="font-family:Impact,'Arial Black',Helvetica,sans-serif;font-size:40px;line-height:1;font-weight:900;letter-spacing:-1px;color:#13dbfb">BLAU.</td><td align="right" style="font-size:11px;letter-spacing:2px;color:#8fa3b8;font-weight:700">RESUMEN · ${hh}</td></tr></table><h1 style="margin:30px 0 10px;font-size:32px;line-height:1.12;letter-spacing:-1px;color:#ffffff;font-weight:800">${esc(title)}<span style="color:#13dbfb">.</span></h1><p style="margin:0;font-size:15px;line-height:1.6;color:#c9d5de">${esc(intro)}</p></td></tr>
 <tr><td style="background:#13dbfb"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${stats.map((s,n)=>cell(w,n===0,n===stats.length-1,s)).join('')}</tr></table></td></tr>
@@ -72,7 +73,7 @@ export async function sendDigests(env:Env,now=new Date(),manual=false):Promise<D
   const key=audience+':'+(manual?'manual '+to:slot),last=await db.prepare('SELECT window_to FROM email_digests WHERE slot LIKE ? ORDER BY window_to DESC LIMIT 1').bind(audience+':%').first<any>();
   const from=last?.window_to??new Date(now.getTime()-12*3600e3).toISOString();
   const claim=await db.prepare('INSERT INTO email_digests(slot,window_from,window_to,created_at) VALUES(?,?,?,?) ON CONFLICT(slot) DO NOTHING').bind(key,from,to,to).run();if(!claim.meta.changes)continue;
-  const [clients,posts,comments,reviews,members]=await Promise.all(['SELECT id,name,color FROM clients WHERE archived=0 ORDER BY name','SELECT id,client_id,title,channel,format,date,status,updated_at,client_changed_at FROM posts','SELECT post_id,author,body,created_at,role FROM comments WHERE internal=0 AND created_at>? AND created_at<=?','SELECT post_id,actor,role,decision,created_at FROM reviews','SELECT email,role,client_id,name FROM members'].map((q,i)=>(i===2?db.prepare(q).bind(from,to):db.prepare(q)).all<any>().then(r=>r.results)));
+  const [clients,posts,comments,reviews,members]=await Promise.all(['SELECT id,name,color,profile FROM clients WHERE archived=0 ORDER BY name','SELECT id,client_id,title,channel,format,date,status,updated_at,client_changed_at FROM posts','SELECT post_id,author,body,created_at,role FROM comments WHERE internal=0 AND created_at>? AND created_at<=?','SELECT post_id,actor,role,decision,created_at FROM reviews','SELECT email,role,client_id,name FROM members'].map((q,i)=>(i===2?db.prepare(q).bind(from,to):db.prepare(q)).all<any>().then(r=>r.results)));
   const names=new Map<string,string>(members.filter((m:any)=>m.name).map((m:any)=>[m.email,m.name]));if(w.owner_name)names.set(w.email,w.owner_name);const named=(v:string)=>names.get(String(v??'').toLowerCase())||v;
   for(const m of comments)m.author=named(m.author);for(const r of reviews)r.actor=named(r.actor);
   const errors:string[]=[];let sent=0;

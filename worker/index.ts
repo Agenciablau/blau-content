@@ -3,9 +3,10 @@ import {createWorkspaceApi} from './workspace';
 import type {Env} from './types';
 import {integrationApi,processStoryQueue} from './integrations';
 import {sendDigests} from './email-digest';
+import {autoApprove} from './auto-approve';
 function security(response:Response){const h=new Headers(response.headers);h.set('Cache-Control','no-store');h.set('X-Content-Type-Options','nosniff');h.set('Referrer-Policy','same-origin');h.set('X-Frame-Options','DENY');h.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://drive.google.com https://*.googleusercontent.com; connect-src 'self'; font-src 'self'; frame-src https://drive.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");return new Response(response.body,{status:response.status,headers:h});}
 export default {
- async scheduled(_controller:ScheduledController,env:Env){await Promise.allSettled([processStoryQueue(env),sendDigests(env)]);},
+ async scheduled(_controller:ScheduledController,env:Env){await Promise.allSettled([processStoryQueue(env),sendDigests(env),autoApprove(env)]);},
  async fetch(request:Request,env:Env):Promise<Response>{
   const url=new URL(request.url);
   if(!env.TEAM_DOMAIN||!env.POLICY_AUD||!env.ADMIN_EMAIL||!env.DB)return security(new Response('Blau Content está pendiente de configuración. Conecta D1 y configura ADMIN_EMAIL, TEAM_DOMAIN y POLICY_AUD en Cloudflare.',{status:503}));
