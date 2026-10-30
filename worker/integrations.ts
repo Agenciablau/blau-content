@@ -3,7 +3,7 @@ import {bufferQuery,instagramChannels,BufferRequestError,remotePostFields} from 
 import {beginDrive,finishDrive,driveConfigured,driveAccessToken,copyDriveFile,mediaOrigin} from './drive-api';
 import {materialLinks,MAX_CAROUSEL_IMAGES} from '../shared/material-links';
 import {madridToUtc,bufferState,lockedBufferStates,bufferFormats} from '../shared/buffer-scheduling';
-import {sendDigestTest} from './email-digest';
+import {sendDigestTest,sendDigests} from './email-digest';
 const fail=(error:string,status=400)=>Response.json({error},{status});
 const stamp=()=>new Date().toISOString();
 async function updateJob(env:Env,id:string,state:string,error='',remoteId?:string){await env.DB!.prepare('UPDATE buffer_jobs SET state=?,error=?,remote_id=COALESCE(?,remote_id),updated_at=?,completed_at=CASE WHEN ?=\'sent\' THEN ? ELSE completed_at END WHERE post_id=?').bind(state,error,remoteId??null,stamp(),state,stamp(),id).run();}
@@ -26,15 +26,16 @@ export async function integrationApi(request:Request,env:Env,user:User):Promise<
  if(request.method==='GET'){
   if(!owner)return fail('Solo el administrador puede configurar conexiones.',403);
   const drive=await db.prepare('SELECT connected_at FROM drive_connection WHERE id=1').first();const bindings=await db.prepare('SELECT * FROM buffer_bindings').all();
-  return Response.json({bufferConfigured:!!env.BUFFER_API_KEY,driveConfigured:driveConfigured(env),driveConnected:!!drive,r2Configured:!!env.MEDIA&&!!env.R2_PUBLIC_ORIGIN,emailConfigured:!!env.BREVO_API_KEY&&!!env.EMAIL_FROM,cleanupPending:(await db.prepare('SELECT COUNT(*) AS count FROM media_cleanup').first<any>())?.count??0,bindings:bindings.results});
+  return Response.json({bufferConfigured:!!env.BUFFER_API_KEY,driveConfigured:driveConfigured(env),driveConnected:!!drive,r2Configured:!!env.MEDIA&&!!env.R2_PUBLIC_ORIGIN,emailConfigured:!!env.BREVO_API_KEY&&!!env.EMAIL_FROM,cleanupPending:(await db.prepare('SELECT COUNT(*) AS count FROM media_cleanup').first<any>())?.count??0,digests:(await db.prepare('SELECT slot,sent,error,created_at FROM email_digests ORDER BY created_at DESC LIMIT 4').all()).results,bindings:bindings.results});
  }
  if(request.method!=='POST')return fail('Método no permitido.',405);
  if(request.headers.get('Origin')!==url.origin||!request.headers.get('Content-Type')?.startsWith('application/json'))return fail('Origen o formato no permitido.',403);
  let body:any;try{body=await request.json();}catch{return fail('Datos no válidos.');}
  if(!body||typeof body!=='object')return fail('Datos no válidos.');
  try{
-  if(['driveConnect','driveDisconnect','channels','bind','cleanup','digestTest'].includes(body.action)&&!owner)return fail('Solo el administrador puede configurar conexiones.',403);
+  if(['driveConnect','driveDisconnect','channels','bind','cleanup','digestTest','digestNow'].includes(body.action)&&!owner)return fail('Solo el administrador puede configurar conexiones.',403);
   if(body.action==='digestTest'){await sendDigestTest(env,user.email);return Response.json({sent:user.email});}
+  if(body.action==='digestNow')return Response.json({digest:await sendDigests(env,new Date(),true)});
   if(body.action==='driveConnect')return Response.json({url:await beginDrive(env,user.userId,url.origin)});
   if(body.action==='driveDisconnect'){await db.prepare('DELETE FROM drive_connection WHERE id=1').run();return Response.json({ok:true});}
   if(body.action==='channels')return Response.json({channels:await instagramChannels(env)});
