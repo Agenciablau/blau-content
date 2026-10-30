@@ -1,0 +1,9 @@
+import {useEffect,useRef,useState} from 'react';
+import {Check,ChevronDown} from 'lucide-react';
+export default function FormatFilter({options,labels,value,onChange}:{options:string[];labels:Record<string,string>;value:string[];onChange:(v:string[])=>void}){
+ const [open,setOpen]=useState(false),box=useRef<HTMLDivElement>(null);
+ useEffect(()=>{if(!open)return;const out=(e:MouseEvent)=>{if(!box.current?.contains(e.target as Node))setOpen(false);};const esc=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.stopPropagation();setOpen(false);box.current?.querySelector<HTMLElement>('.format-filter-toggle')?.focus();}};document.addEventListener('mousedown',out);document.addEventListener('keydown',esc,true);return()=>{document.removeEventListener('mousedown',out);document.removeEventListener('keydown',esc,true);};},[open]);
+ const name=(f:string)=>labels[f]??f,text=!value.length?'Todos los formatos':value.length<=2?value.map(name).join(', '):value.length+' formatos';
+ const toggle=(f:string)=>onChange(value.includes(f)?value.filter(x=>x!==f):options.filter(o=>o===f||value.includes(o)));
+ return <div className={'format-filter'+(value.length?' active':'')} ref={box}><button type="button" className="format-filter-toggle" aria-label="Filtrar por tipo de publicación" aria-haspopup="true" aria-expanded={open} onClick={()=>setOpen(!open)}><span>{text}</span><ChevronDown size={16}/></button>{open&&<div className="format-filter-menu" role="group" aria-label="Formatos"><button type="button" aria-pressed={!value.length} className={!value.length?'on':''} onClick={()=>{onChange([]);setOpen(false);}}><i>{!value.length&&<Check size={13}/>}</i>Todos los formatos</button>{options.map(f=>{const on=value.includes(f);return <button type="button" key={f} aria-pressed={on} className={on?'on':''} onClick={()=>toggle(f)}><i>{on&&<Check size={13}/>}</i>{name(f)}</button>;})}</div>}</div>;
+}
