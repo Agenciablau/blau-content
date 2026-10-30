@@ -3,7 +3,7 @@ import type {Env,User} from './types';
 import {importBackup} from './import-backup';
 import {validateMaterial,materialLinks} from '../shared/material-links';
 import {normalizeClientProfile} from '../shared/client-profile';
-import {lockedBufferStates,bufferState} from '../shared/buffer-scheduling';
+import {lockedBufferStates,bufferState,bufferFormats} from '../shared/buffer-scheduling';
 import {sendWelcome} from './email-welcome';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
@@ -156,7 +156,7 @@ async function POST(req:Request){
    const now=new Date().toISOString();
    const version=now+':'+crypto.randomUUID();
    const operations=[c.db.prepare('UPDATE posts SET status=?,updated_at=? WHERE id=? AND updated_at=?').bind(b.status,version,existing.id,b.updated_at),c.db.prepare('INSERT INTO reviews(id,post_id,actor,email,role,decision,snapshot,created_at) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND updated_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,c.user.email,preview?'team':c.role,b.status,JSON.stringify(existing),now,existing.id,version)];
-   if(!preview&&c.role==='client'&&b.status==='Aprobado'&&existing.channel==='Instagram'&&['Historia','Reel'].includes(existing.format))operations.push(c.db.prepare("INSERT INTO buffer_jobs(post_id,client_id,state,mode,snapshot,created_at,updated_at) SELECT id,client_id,'queued','automatic',?,?,? FROM posts WHERE id=? AND updated_at=? ON CONFLICT(post_id) DO UPDATE SET state='queued',mode='automatic',snapshot=excluded.snapshot,error='',updated_at=excluded.updated_at WHERE buffer_jobs.state IN ('error','cancelled') AND buffer_jobs.assets='[]'").bind(JSON.stringify({approvedVersion:version}),now,now,existing.id,version));
+   if(!preview&&c.role==='client'&&b.status==='Aprobado'&&existing.channel==='Instagram'&&bufferFormats.includes(existing.format))operations.push(c.db.prepare("INSERT INTO buffer_jobs(post_id,client_id,state,mode,snapshot,created_at,updated_at) SELECT id,client_id,'queued','automatic',?,?,? FROM posts WHERE id=? AND updated_at=? ON CONFLICT(post_id) DO UPDATE SET state='queued',mode='automatic',snapshot=excluded.snapshot,error='',updated_at=excluded.updated_at WHERE buffer_jobs.state IN ('error','cancelled') AND buffer_jobs.assets='[]'").bind(JSON.stringify({approvedVersion:version}),now,now,existing.id,version));
    if(str(b.body))operations.push(c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND updated_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,str(b.body),now,c.role==='client'&&!preview?'client':'team',b.status==='Aprobado'?1:0,existing.id,version));
    if(b.status==='Aprobado')operations.push(c.db.prepare('UPDATE comments SET resolved=1 WHERE post_id=? AND EXISTS(SELECT 1 FROM posts WHERE id=? AND updated_at=?)').bind(existing.id,existing.id,version));
    const results=await c.db.batch(operations);
