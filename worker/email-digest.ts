@@ -62,13 +62,14 @@ export async function send(env:Env,to:string,subject:string,body:{html:string;te
  const r=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':env.BREVO_API_KEY!,'content-type':'application/json',accept:'application/json'},body:JSON.stringify({sender:{name:'Blau Content',email:env.EMAIL_FROM},to:[{email:to}],subject,htmlContent:body.html,textContent:body.text})});
  if(!r.ok){let m='';try{m=String(((await r.json()) as any)?.message??'').slice(0,200);}catch{}throw new Error(`Brevo ${r.status}${m?': '+m:''}`);}
 }
-export async function sendDigests(env:Env,now=new Date()):Promise<void>{
- const db=env.DB;if(!db||!env.BREVO_API_KEY||!env.EMAIL_FROM)return;
- const {hour,slot,weekend}=madridSlot(now),due=(['team','client'] as const).filter(a=>schedule[a].includes(hour)&&!(a==='client'&&weekend));if(!due.length)return;
- const w=await db.prepare('SELECT email,owner_name FROM workspace WHERE id=1').first<any>();if(!w)return;
+export type DigestResult={audience:'team'|'client';sent:number;error:string};
+export async function sendDigests(env:Env,now=new Date(),manual=false):Promise<DigestResult[]>{
+ const db=env.DB,results:DigestResult[]=[];if(!db||!env.BREVO_API_KEY||!env.EMAIL_FROM){if(manual)throw new Error('Configura BREVO_API_KEY y EMAIL_FROM en Cloudflare.');return results;}
+ const {hour,slot,weekend}=madridSlot(now),due=(['team','client'] as const).filter(a=>manual||schedule[a].includes(hour)&&!(a==='client'&&weekend));if(!due.length)return results;
+ const w=await db.prepare('SELECT email,owner_name FROM workspace WHERE id=1').first<any>();if(!w)return results;
  const link=env.APP_ORIGIN??'',to=now.toISOString();
  for(const audience of due){
-  const key=audience+':'+slot,last=await db.prepare('SELECT window_to FROM email_digests WHERE slot LIKE ? ORDER BY window_to DESC LIMIT 1').bind(audience+':%').first<any>();
+  const key=audience+':'+(manual?'manual '+to:slot),last=await db.prepare('SELECT window_to FROM email_digests WHERE slot LIKE ? ORDER BY window_to DESC LIMIT 1').bind(audience+':%').first<any>();
   const from=last?.window_to??new Date(now.getTime()-12*3600e3).toISOString();
   const claim=await db.prepare('INSERT INTO email_digests(slot,window_from,window_to,created_at) VALUES(?,?,?,?) ON CONFLICT(slot) DO NOTHING').bind(key,from,to,to).run();if(!claim.meta.changes)continue;
   const [clients,posts,comments,reviews,members]=await Promise.all(['SELECT id,name,color FROM clients WHERE archived=0 ORDER BY name','SELECT id,client_id,title,channel,format,date,status,updated_at,client_changed_at FROM posts','SELECT post_id,author,body,created_at,role FROM comments WHERE internal=0 AND created_at>? AND created_at<=?','SELECT post_id,actor,role,decision,created_at FROM reviews','SELECT email,role,client_id,name FROM members'].map((q,i)=>(i===2?db.prepare(q).bind(from,to):db.prepare(q)).all<any>().then(r=>r.results)));
@@ -78,8 +79,9 @@ export async function sendDigests(env:Env,now=new Date()):Promise<void>{
   const out=async(email:string,groups:Group[])=>{const body=renderDigest(groups,audience,hour,link);try{await send(env,email,`Blau · ${body.summary.charAt(0).toUpperCase()+body.summary.slice(1)}`,body);sent++;}catch(e){errors.push(email+': '+(e instanceof Error?e.message:'error'));}};
   if(audience==='team'){const groups=teamDigest(clients,posts,comments,reviews,from,to);if(groups.length)for(const email of [...new Set([w.email,...members.filter((m:any)=>m.role==='team').map((m:any)=>m.email)].map((e:string)=>e.toLowerCase()))])await out(email,groups);}
   else for(const c of clients){const groups=clientDigest(c,posts,comments,reviews,from,to);if(groups.some(g=>g.sections.some(s=>s.kind==='pending'||s.kind==='replies')))for(const m of members.filter((m:any)=>m.role==='client'&&m.client_id===c.id))await out(m.email,groups);}
-  await db.prepare('UPDATE email_digests SET sent=?,error=? WHERE slot=?').bind(sent,errors.join('; ').slice(0,2000),key).run();
+  await db.prepare('UPDATE email_digests SET sent=?,error=? WHERE slot=?').bind(sent,errors.join('; ').slice(0,2000),key).run();results.push({audience,sent,error:errors.join('; ').slice(0,2000)});
  }
+ return results;
 }
 export async function sendDigestTest(env:Env,email:string){
  if(!env.BREVO_API_KEY||!env.EMAIL_FROM)throw new Error('Configura BREVO_API_KEY y EMAIL_FROM en Cloudflare.');
