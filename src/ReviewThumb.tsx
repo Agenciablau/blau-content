@@ -4,7 +4,7 @@ import {drivePreviewUrl} from './drive-preview';
 import {materialLinks} from '../shared/material-links';
 export function driveThumbnailUrl(value:string){const preview=drivePreviewUrl(value);if(!preview)return null;const u=new URL(preview),id=u.pathname.split('/')[3],t=new URL('https://drive.google.com/thumbnail');t.searchParams.set('id',id);t.searchParams.set('sz','w800');const key=u.searchParams.get('resourcekey');if(key)t.searchParams.set('resourcekey',key);return t.toString();}
 export default function ReviewThumb({post,onOpen}:{post:any;onOpen:()=>void}){
- const links=materialLinks(post.asset??''),src=links.map(driveThumbnailUrl).find(Boolean),[failed,setFailed]=useState(false),video=['Reel','Vídeo','Historia'].includes(post.format);
+ const links=materialLinks(post.asset??''),src=links.map(driveThumbnailUrl).find(Boolean),[failed,setFailed]=useState(false),video=['Reel','Vídeo'].includes(post.format);
  return <button type="button" className={'review-thumb'+(src&&!failed?' has-image':'')} onClick={onOpen} aria-label={`Ver ${post.title}`}>{src&&!failed?<><img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={()=>setFailed(true)}/>{post.format==='Carrusel'&&links.length>1&&<span className="thumb-badge"><Layers size={13}/>{links.length}</span>}{video&&<span className="thumb-play"><Play size={18}/></span>}</>:<span className="thumb-empty"><ImageOff size={20}/>{links.length?'Vista previa no disponible':'Sin material todavía'}</span>}</button>;
 }
 const glyph=(children:any)=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
