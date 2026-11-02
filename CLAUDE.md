@@ -16,14 +16,14 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 
 ## Arquitectura
 
-- `src/`: React 19 + TypeScript + Vite. `Planner.tsx` contiene casi toda la interfaz (vistas, barra lateral, modales). Componentes auxiliares: `ClientProfile*`, `MonthlyCommitments`, `Buffer*`, `CreativePreview`, `CarouselLinksEditor`, `DeleteClientConfirmation`.
+- `src/`: React 19 + TypeScript + Vite. `Planner.tsx` contiene casi toda la interfaz (vistas, barra lateral, modales). Componentes auxiliares: `Projects` (tablero, vista del cliente, panel de tarea), `ProjectEditor`, `ClientProfile*`, `MonthlyCommitments`, `Buffer*`, `CreativePreview`, `CarouselLinksEditor`, `DeleteClientConfirmation`.
 - `worker/`: Cloudflare Worker que sirve `dist/` y la API.
   - `index.ts`: cabeceras de seguridad, comprobación de origen, autenticación y enrutado. Cron cada minuto → `processStoryQueue` y `sendDigests` (resúmenes por correo con Brevo, `email-digest.ts`: equipo a las 10:00 y 22:00; clientes a las 10:00 y 16:00 de lunes a viernes y solo si tienen algo que aprobar o una respuesta).
   - `auth.ts`: verificación del JWT de Cloudflare Access (`Cf-Access-Jwt-Assertion`, RS256, emisor, audiencia, caducidad).
-  - `workspace.ts`: `GET/POST /api/workspace` (acciones `init`, `import`, `client`, `deleteClient`, `member`, `removeMember`, `post`, `review`, `comment`, `delete`, `keyDate`, `deleteKeyDate`; `?export=1`, `?preview=<cliente>`). Aquí están los permisos y el aislamiento por cliente.
+  - `workspace.ts`: `GET/POST /api/workspace` (acciones `init`, `import`, `client`, `deleteClient`, `member`, `removeMember`, `post`, `review`, `comment`, `delete`, `keyDate`, `deleteKeyDate` y las de proyectos en `projects.ts`: `project`, `deleteProject`, `task`, `moveTask`, `deleteTask`, `taskComment`, `taskReview`, `taskSent`; `?export=1`, `?preview=<cliente>`). Aquí están los permisos y el aislamiento por cliente.
   - `integrations.ts`, `buffer-api.ts`, `drive-api.ts`: `/api/integrations/*`, Buffer, OAuth de Google Drive (solo lectura) y copias en R2.
   - `import-backup.ts`: importación JSON (versión 1) en espacio vacío, atómica, máximo 4.000 registros.
-- `shared/`: lógica común de cliente y Worker (`client-profile.ts`, `monthly-commitments.ts`, `buffer-scheduling.ts`, `material-links.ts`).
+- `shared/`: lógica común de cliente y Worker (`projects.ts`, `client-profile.ts`, `monthly-commitments.ts`, `buffer-scheduling.ts`, `material-links.ts`).
 - `migrations/`: SQL de D1, numerado. Crea siempre una migración nueva; nunca edites una ya aplicada.
 - `scripts/check-*.mjs`: pruebas con SQLite de Node y servicios simulados.
 
@@ -33,6 +33,8 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 - `client` y `collaborator` solo ven su marca. `client` no ve Idea ni Borrador.
 - Clientes y colaboradores solo ven comentarios y revisiones posteriores a `posts.client_changed_at`.
 - Las notas internas (`comments.internal=1`) solo las escriben y ven `owner` y `team`; el Worker las excluye para cliente, colaborador, vista previa y resúmenes de correo.
+- Secciones del cliente (`profile.sections`, `social` y `projects`, por defecto las dos; solo `owner` las cambia y al menos una debe quedar activa): sin `social`, el Worker no devuelve publicaciones, comentarios, revisiones ni fechas clave a cliente y colaborador, rechaza sus acciones de publicaciones y el cliente no recibe resúmenes; sin `projects`, no ve ni actúa sobre proyectos.
+- Proyectos (`projects`, `project_tasks`, `project_comments`, `project_reviews`): solo `owner` y `team` crean, editan y mueven; solo `owner` elimina (con el nombre exacto). Cliente y colaborador ven los proyectos de su marca, solo tareas `visible=1`, campos visibles y comentarios no internos. Solo el cliente aprueba o pide cambios en entregables «En revisión» y marca sus tareas como enviadas; el colaborador comenta.
 - Fechas clave (`key_dates`): solo `owner` y `team` las gestionan; cliente y colaborador ven las globales (`client_id` nulo) y las de su marca. Los días señalados genéricos están en `shared/key-dates.ts`.
 - `profile.drive_folder_url` se elimina de la respuesta para quien no sea `owner`; solo `owner` lo edita.
 - Solo `owner` cambia compromisos mensuales, gestiona accesos, exporta, importa, elimina clientes y reasigna publicaciones.
@@ -41,6 +43,7 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 
 ## Comportamientos que deben mantenerse
 
+- Barra lateral por bloques separados por una línea fina: Espacio de trabajo, Redes sociales, Proyectos (lista del cliente seleccionado) y Administración. Cliente y colaborador solo ven los bloques de sus secciones.
 - Selector global de cliente (solo equipo y administrador) en la barra lateral, guardado en `localStorage` con la clave `blau:selected-client`. Afecta a vistas, contadores y compromisos.
 - Concurrencia optimista: `updated_at` es una versión (`ISO:uuid`); las escrituras comparan la versión y devuelven 409 si cambió.
 - Reasignación: solo `owner`, publicación no publicada, cliente destino activo, sin ningún registro en `buffer_jobs` (cualquier estado). Pasa a Borrador (Idea sigue como Idea) y fija `client_changed_at`.

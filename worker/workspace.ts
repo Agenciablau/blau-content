@@ -2,9 +2,10 @@ import {bufferQuery,remotePostFields} from './buffer-api';
 import type {Env,User} from './types';
 import {importBackup} from './import-backup';
 import {validateMaterial,materialLinks} from '../shared/material-links';
-import {normalizeClientProfile} from '../shared/client-profile';
+import {normalizeClientProfile,readClientProfile} from '../shared/client-profile';
 import {lockedBufferStates,bufferState,sendsToBuffer} from '../shared/buffer-scheduling';
 import {sendWelcome} from './email-welcome';
+import {loadProjects,projectAction,projectActions} from './projects';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
 const channels=['Instagram','LinkedIn','Email','Blog / web','TikTok','Facebook'];
@@ -33,23 +34,25 @@ async function GET(req?:Request){
  if(req&&new URL(req.url).searchParams.get('export')==='1'){
   if(c.role!=='owner')return fail('Solo el administrador puede exportar.',403);
   const backup:any={exported_at:new Date().toISOString(),version:1};
-  for(const table of ['clients','posts','comments','reviews','members','key_dates'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
+  for(const table of ['clients','posts','comments','reviews','members','key_dates','projects','project_tasks','project_comments','project_reviews'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
   backup.owner_name=c.w.owner_name??'';
   return Response.json(backup,{headers:{'Cache-Control':'no-store','Content-Disposition':'attachment; filename=blau-content-backup.json'}});
  }
  const cl=await c.db.prepare(scoped?'SELECT * FROM clients WHERE id=?':'SELECT * FROM clients ORDER BY name').bind(...(scoped?[c.clientId]:[])).all();
- const p=await c.db.prepare(client?"SELECT * FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador') ORDER BY date":scoped?"SELECT * FROM posts WHERE client_id=? ORDER BY date":"SELECT * FROM posts ORDER BY date").bind(...(scoped?[c.clientId]:[])).all();
- const scope=client?" WHERE post_id IN (SELECT id FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador'))":scoped?" WHERE post_id IN (SELECT id FROM posts WHERE client_id=?)":'';
+ const sections=scoped?readClientProfile((cl.results[0] as any)?.profile).sections:{social:true,projects:true},noSocial=scoped&&!sections.social,none=' AND 0';
+ const p=await c.db.prepare(client?"SELECT * FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador')"+(noSocial?none:'')+" ORDER BY date":scoped?"SELECT * FROM posts WHERE client_id=?"+(noSocial?none:'')+" ORDER BY date":"SELECT * FROM posts ORDER BY date").bind(...(scoped?[c.clientId]:[])).all();
+ const scope=client?" WHERE post_id IN (SELECT id FROM posts WHERE client_id=? AND status NOT IN ('Idea','Borrador'))"+(noSocial?none:''):scoped?" WHERE post_id IN (SELECT id FROM posts WHERE client_id=?)"+(noSocial?none:''):'';
  const commentScope=scope+(scoped?' AND internal=0 AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=comments.post_id)':'');
  const reviewScope=scope+(scoped?' AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=reviews.post_id)':'');
  const co=await c.db.prepare('SELECT * FROM comments'+commentScope+' ORDER BY created_at, rowid').bind(...(scoped?[c.clientId]:[])).all();
  const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+reviewScope+' ORDER BY created_at DESC').bind(...(scoped?[c.clientId]:[])).all();
  const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id,name FROM members WHERE role IN ('client','collaborator') ORDER BY email").all():{results:[]};
- const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?" WHERE client_id=? AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))":scoped?" WHERE client_id=?":'')).bind(...(scoped?[c.clientId]:[])).all();
- const keyDates=await c.db.prepare('SELECT id,client_id,date,title,yearly FROM key_dates'+(scoped?' WHERE client_id IS NULL OR client_id=?':'')+' ORDER BY date').bind(...(scoped?[c.clientId]:[])).all();
+ const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?" WHERE client_id=? AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))":scoped?" WHERE client_id=?":'')+(noSocial?none:'')).bind(...(scoped?[c.clientId]:[])).all();
+ const keyDates=await c.db.prepare('SELECT id,client_id,date,title,yearly FROM key_dates'+(scoped?' WHERE (client_id IS NULL OR client_id=?)'+(noSocial?none:''):'')+' ORDER BY date').bind(...(scoped?[c.clientId]:[])).all();
+ const projectData=await loadProjects(c.db,c.role,c.clientId,sections.projects);
  const names=new Map<string,string>((await c.db.prepare("SELECT email,name FROM members WHERE name<>''").all<any>()).results.map((r:any)=>[r.email,r.name]));if(c.w.owner_name)names.set(c.w.email,c.w.owner_name);
  const named=(v:string)=>names.get(String(v??'').toLowerCase())||v;
- return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author)})),members:m.results,reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author)})),members:m.results,reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author)})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)}))},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
 async function POST(req:Request){
@@ -64,7 +67,7 @@ async function POST(req:Request){
  let b:any;try{b=await req.json();}catch{return fail('Datos no válidos.');}
  if(!b||typeof b!=='object')return fail('Datos no válidos.');
  const extra:any={};
- if(preview&&!['review','comment'].includes(b.action))return fail('Desde la vista de cliente solo puedes comentar o revisar publicaciones.',403);
+ if(preview&&!['review','comment','taskComment','taskReview','taskSent'].includes(b.action))return fail('Desde la vista de cliente solo puedes comentar, revisar o marcar tareas como enviadas.',403);
  if(b.action==='init'){
   if(c.user.email!==env.ADMIN_EMAIL?.trim().toLowerCase())return fail('Solo el administrador configurado puede crear el espacio.',403);
   if(c.w)return fail('El espacio ya está configurado.',409);
@@ -76,6 +79,8 @@ async function POST(req:Request){
  if(!c.w||c.role==='none')return fail('No tienes permiso para esta acción.',403);
  const staff=c.role==='owner'||c.role==='team',collaborator=c.role==='collaborator';
  if(collaborator&&(!c.clientId||!await c.db.prepare('SELECT id FROM clients WHERE id=?').bind(c.clientId).first()))return fail('Tu acceso no tiene una marca asignada válida.',403);
+ if(projectActions.includes(b.action)){const r=await projectAction({db:c.db,role:c.role,clientId:c.clientId,user:c.user,preview:!!preview},b);return r??Response.json({ok:true});}
+ if(['post','review','comment','delete'].includes(b.action)&&(c.role==='client'||collaborator)&&!readClientProfile((await c.db.prepare('SELECT profile FROM clients WHERE id=?').bind(c.clientId??'').first<any>())?.profile).sections.social)return fail('Tu acceso no incluye redes sociales.',403);
  if(b.action==='import'){
   if(c.role!=='owner')return fail('Solo el administrador puede importar.',403);
   try{await importBackup(c.db,b.backup,c.user);}catch(e){return fail(e instanceof Error?e.message:'No se pudo importar.');}
@@ -98,14 +103,17 @@ async function POST(req:Request){
    c.db.prepare(`DELETE FROM members WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM buffer_bindings WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM key_dates WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
+   ...['project_reviews','project_comments'].map(t=>c.db.prepare(`DELETE FROM ${t} WHERE task_id IN (SELECT id FROM project_tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id=?)) AND ${guard}`).bind(id,id,current.name)),
+   c.db.prepare(`DELETE FROM project_tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id=?) AND ${guard}`).bind(id,id,current.name),
+   c.db.prepare(`DELETE FROM projects WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM clients WHERE id=? AND name=? AND ${guard}`).bind(id,current.name,id,current.name)
   ]);
-  if(!results[8].meta.changes)return fail('El cliente ha cambiado o tiene un envío nuevo. Vuelve a abrir su ficha antes de eliminarlo.',409);
+  if(!results[results.length-1].meta.changes)return fail('El cliente ha cambiado o tiene un envío nuevo. Vuelve a abrir su ficha antes de eliminarlo.',409);
   try{if(cleanupKeys.length){if(!env.MEDIA)throw Error('R2 no disponible');await env.MEDIA.delete(cleanupKeys);}await c.db.prepare('DELETE FROM media_cleanup WHERE id=?').bind(cleanupId).run();}catch{/* Keep the cleanup queue for the administrator; the database deletion succeeded. */}
  }else if(b.action==='client'){
   if(!staff)return fail('Solo el equipo puede gestionar clientes.',403);
   const name=str(b.name,100),color=str(b.color,7);if(!name||!/^#[0-9a-f]{6}$/i.test(color))return fail('Introduce nombre y color válidos.');
-  let profile:string;try{const current=b.id?await c.db.prepare('SELECT profile FROM clients WHERE id=?').bind(str(b.id)).first<{profile:string}>():null;if(b.id&&!current)return fail('Cliente no encontrado.',404);const nextProfile=normalizeClientProfile(b.profile===undefined?current?.profile:b.profile);if(c.role!=='owner')nextProfile.drive_folder_url=normalizeClientProfile(current?.profile).drive_folder_url;profile=JSON.stringify(nextProfile);if(c.role!=='owner'&&normalizeClientProfile(profile).auto_approve!==normalizeClientProfile(current?.profile).auto_approve)return fail('Solo el administrador puede cambiar la aprobación automática.',403);if(c.role!=='owner'&&JSON.stringify(normalizeClientProfile(profile).monthly_goals)!==JSON.stringify(normalizeClientProfile(current?.profile).monthly_goals))return fail('Solo el administrador puede cambiar el compromiso mensual.',403);}catch(e){return fail(e instanceof Error?e.message:'Datos del cliente no válidos.');}
+  let profile:string;try{const current=b.id?await c.db.prepare('SELECT profile FROM clients WHERE id=?').bind(str(b.id)).first<{profile:string}>():null;if(b.id&&!current)return fail('Cliente no encontrado.',404);const nextProfile=normalizeClientProfile(b.profile===undefined?current?.profile:b.profile);if(c.role!=='owner')nextProfile.drive_folder_url=normalizeClientProfile(current?.profile).drive_folder_url;profile=JSON.stringify(nextProfile);if(c.role!=='owner'&&normalizeClientProfile(profile).auto_approve!==normalizeClientProfile(current?.profile).auto_approve)return fail('Solo el administrador puede cambiar la aprobación automática.',403);if(c.role!=='owner'&&JSON.stringify(normalizeClientProfile(profile).monthly_goals)!==JSON.stringify(normalizeClientProfile(current?.profile).monthly_goals))return fail('Solo el administrador puede cambiar el compromiso mensual.',403);if(c.role!=='owner'&&JSON.stringify(normalizeClientProfile(profile).sections)!==JSON.stringify(readClientProfile(current?.profile).sections))return fail('Solo el administrador puede cambiar las secciones que ve el cliente.',403);}catch(e){return fail(e instanceof Error?e.message:'Datos del cliente no válidos.');}
   if(b.id){await c.db.prepare('UPDATE clients SET name=?,color=?,notes=?,archived=?,profile=? WHERE id=?').bind(name,color,str(b.notes),b.archived?1:0,profile,str(b.id)).run();}
   else await c.db.prepare('INSERT INTO clients(id,name,color,notes,profile) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),name,color,str(b.notes),profile).run();
  }else if(b.action==='member'){
