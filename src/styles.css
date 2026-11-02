@@ -524,3 +524,6 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 @media(max-width:600px){.pe-r2.c3{grid-template-columns:minmax(0,1fr);padding-left:0}.pe-g2,.pj-fields{grid-template-columns:minmax(0,1fr)}.pe-fs{padding:18px 16px}.pe-sl.w140,.pe-sl.w160{width:100%}}
 @media(prefers-reduced-motion:reduce){input.pe-switch,input.pe-switch::after{transition:none}}
 .pj-drawer label.pe-opt,.pj-drawer label.pe-mini,.pj-drawer .pj-check label{flex-direction:row!important;align-items:center!important;text-align:left!important}.pj-drawer label.pe-opt{justify-content:space-between!important}.pj-drawer label.pe-opt>span{flex:1}
+.cpd-email b{display:block;font-size:14px;color:var(--blau-ink)}
+.cpd-user-actions{display:inline-flex;align-items:center;gap:2px;margin-left:4px}
+.cpd-user-actions .icon-btn:hover{background:#fdecec;color:#a33b3b}
