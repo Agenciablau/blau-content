@@ -43,7 +43,7 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 
 ## Comportamientos que deben mantenerse
 
-- Barra lateral por bloques separados por una línea fina: Espacio de trabajo, Redes sociales, Proyectos (lista del cliente seleccionado) y Administración. Cliente y colaborador solo ven los bloques de sus secciones; el equipo y el administrador, los del cliente seleccionado (con «Todos los clientes» se ven los dos).
+- Barra lateral por bloques separados por una línea fina: Espacio de trabajo (Resumen), Redes sociales, Proyectos (lista del cliente seleccionado) y Administración (Clientes para el equipo; Accesos e Integraciones solo para el administrador). El administrador edita y revoca los usuarios de una marca desde su ficha. Cliente y colaborador solo ven los bloques de sus secciones; el equipo y el administrador, los del cliente seleccionado (con «Todos los clientes» se ven los dos).
 - Selector global de cliente (solo equipo y administrador) en la barra lateral, guardado en `localStorage` con la clave `blau:selected-client`. Afecta a vistas, contadores y compromisos.
 - Concurrencia optimista: `updated_at` es una versión (`ISO:uuid`); las escrituras comparan la versión y devuelven 409 si cambió.
 - Reasignación: solo `owner`, publicación no publicada, cliente destino activo, sin ningún registro en `buffer_jobs` (cualquier estado). Pasa a Borrador (Idea sigue como Idea) y fija `client_changed_at`.
