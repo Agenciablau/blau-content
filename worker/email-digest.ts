@@ -79,7 +79,7 @@ export async function sendDigests(env:Env,now=new Date(),manual=false):Promise<D
   const errors:string[]=[];let sent=0;
   const out=async(email:string,groups:Group[])=>{const body=renderDigest(groups,audience,hour,link);try{await send(env,email,`Blau · ${body.summary.charAt(0).toUpperCase()+body.summary.slice(1)}`,body);sent++;}catch(e){errors.push(email+': '+(e instanceof Error?e.message:'error'));}};
   if(audience==='team'){const groups=teamDigest(clients,posts,comments,reviews,from,to);if(groups.length)for(const email of [...new Set([w.email,...members.filter((m:any)=>m.role==='team').map((m:any)=>m.email)].map((e:string)=>e.toLowerCase()))])await out(email,groups);}
-  else for(const c of clients){const groups=clientDigest(c,posts,comments,reviews,from,to);if(groups.some(g=>g.sections.some(s=>s.kind==='pending'||s.kind==='replies')))for(const m of members.filter((m:any)=>m.role==='client'&&m.client_id===c.id))await out(m.email,groups);}
+  else for(const c of clients.filter((c:any)=>readClientProfile(c.profile).sections.social)){const groups=clientDigest(c,posts,comments,reviews,from,to);if(groups.some(g=>g.sections.some(s=>s.kind==='pending'||s.kind==='replies')))for(const m of members.filter((m:any)=>m.role==='client'&&m.client_id===c.id))await out(m.email,groups);}
   await db.prepare('UPDATE email_digests SET sent=?,error=? WHERE slot=?').bind(sent,errors.join('; ').slice(0,2000),key).run();results.push({audience,sent,error:errors.join('; ').slice(0,2000)});
  }
  return results;

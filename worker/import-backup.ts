@@ -1,16 +1,19 @@
 import type {User} from './types';
 import {validateMaterial} from '../shared/material-links';
 import {normalizeClientProfile} from '../shared/client-profile';
+import {normalizeProject,normalizeTask,parseJson} from '../shared/projects';
 type Row=Record<string,unknown>;
 const text=(x:unknown,max=15000)=>typeof x==='string'&&x.length<=max;
 export async function importBackup(db:D1Database,backup:unknown,user:User){
  if(!backup||typeof backup!=='object')throw Error('Copia no válida.');
  const b=backup as Record<string,unknown>;
  const tables=['clients','posts','comments','reviews','members'] as const;
- if(b.version!==1||!tables.every(t=>Array.isArray(b[t]))||(b.key_dates!==undefined&&!Array.isArray(b.key_dates)))throw Error('Formato de copia no válido.');
+ const optional=['key_dates','projects','project_tasks','project_comments','project_reviews'] as const;
+ if(b.version!==1||!tables.every(t=>Array.isArray(b[t]))||optional.some(t=>b[t]!==undefined&&!Array.isArray(b[t])))throw Error('Formato de copia no válido.');
  const rows=Object.fromEntries(tables.map(t=>[t,b[t]])) as Record<typeof tables[number],Row[]>,keyDates=(b.key_dates??[]) as Row[];
- if(tables.reduce((n,t)=>n+rows[t].length,0)+keyDates.length>4000)throw Error('La copia supera 4.000 registros. Solicita una importación por lotes.');
- for(const t of [...tables,'key_dates']){const n=await db.prepare(`SELECT COUNT(*) AS count FROM ${t}`).first<{count:number}>();if(n?.count)throw Error('La importación solo se permite en un espacio vacío.');}
+ const extra=Object.fromEntries(optional.slice(1).map(t=>[t,(b[t]??[]) as Row[]])) as Record<string,Row[]>;
+ if(tables.reduce((n,t)=>n+rows[t].length,0)+keyDates.length+Object.values(extra).reduce((n,r)=>n+r.length,0)>4000)throw Error('La copia supera 4.000 registros. Solicita una importación por lotes.');
+ for(const t of [...tables,...optional]){const n=await db.prepare(`SELECT COUNT(*) AS count FROM ${t}`).first<{count:number}>();if(n?.count)throw Error('La importación solo se permite en un espacio vacío.');}
  const clients=new Set(rows.clients.map(r=>r.id)),posts=new Set(rows.posts.map(r=>r.id));
  const valid=(condition:boolean)=>{if(!condition)throw Error('La copia contiene registros no válidos.');};
  const statements:D1PreparedStatement[]=[];
@@ -20,6 +23,11 @@ export async function importBackup(db:D1Database,backup:unknown,user:User){
  for(const r of rows.reviews){valid(text(r.id,100)&&posts.has(r.post_id)&&text(r.actor,254)&&text(r.email,254)&&text(r.role,30)&&['Aprobado','Cambios solicitados'].includes(r.decision as string)&&text(r.snapshot,100000)&&text(r.created_at,100));statements.push(db.prepare('INSERT INTO reviews(id,post_id,actor,email,role,decision,snapshot,created_at) VALUES(?,?,?,?,?,?,?,?)').bind(r.id,r.post_id,r.actor,r.email,r.role,r.decision,r.snapshot,r.created_at));}
  for(const r of rows.members){valid(text(r.email,254)&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email as string)&&['team','client','collaborator'].includes(r.role as string)&&(r.role==='team'||clients.has(r.client_id)));if((r.email as string).toLowerCase()===user.email)continue;statements.push(db.prepare('INSERT INTO members(email,role,client_id,name) VALUES(?,?,?,?)').bind((r.email as string).toLowerCase(),r.role,r.role!=='team'?r.client_id:null,typeof r.name==='string'?r.name.trim().slice(0,80):''));}
  for(const r of keyDates){valid(text(r.id,100)&&text(r.title,80)&&!!r.title&&typeof r.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(r.date)&&(r.client_id===null||r.client_id===undefined||clients.has(r.client_id))&&text(r.created_at,100));statements.push(db.prepare('INSERT INTO key_dates(id,client_id,date,title,yearly,created_at) VALUES(?,?,?,?,?,?)').bind(r.id,r.client_id??null,r.date,r.title,r.yearly?1:0,r.created_at));}
+ const projectPhases=new Map<unknown,string[]>(),tasks=new Set<unknown>();
+ for(const r of extra.projects){valid(text(r.id,100)&&clients.has(r.client_id)&&text(r.created_at,100)&&text(r.updated_at,150));let p;try{p=normalizeProject({...r,phases:parseJson(r.phases,[]),fields:parseJson(r.fields,[]),options:parseJson(r.options,{}),team:parseJson(r.team,[])});}catch{valid(false);return;}valid(p.template===r.template&&p.viewer===r.viewer&&p.status===r.status);projectPhases.set(r.id,p.phases.map(x=>x.id));statements.push(db.prepare('INSERT INTO projects(id,client_id,name,summary,template,viewer,status,phases,fields,options,team,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(r.id,r.client_id,p.name,p.summary,p.template,p.viewer,p.status,JSON.stringify(p.phases),JSON.stringify(p.fields),JSON.stringify(p.options),JSON.stringify(p.team),r.created_at,r.updated_at));}
+ for(const r of extra.project_tasks){valid(text(r.id,100)&&projectPhases.has(r.project_id)&&Number.isInteger(r.position)&&text(r.done_at,100)&&text(r.created_at,100)&&text(r.updated_at,150));let t;try{t=normalizeTask({...r,views:parseJson(r.views,[]),checklist:parseJson(r.checklist,[])},projectPhases.get(r.project_id)!);}catch{valid(false);return;}valid(t.column_key===r.column_key&&t.phase_id===r.phase_id);tasks.add(r.id);statements.push(db.prepare('INSERT INTO project_tasks(id,project_id,phase_id,column_key,position,title,description,assignee,due,visible,client_task,deliverable,views,checklist,links,done_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(r.id,r.project_id,t.phase_id,t.column_key,r.position,t.title,t.description,t.assignee,t.due,t.visible,t.client_task,t.deliverable,t.views,t.checklist,t.links,r.done_at,r.created_at,r.updated_at));}
+ for(const r of extra.project_comments){valid(text(r.id,100)&&tasks.has(r.task_id)&&text(r.author,254)&&!!r.body&&text(r.body,5000)&&['client','team','collaborator'].includes(r.role as string)&&text(r.created_at,100));statements.push(db.prepare('INSERT INTO project_comments(id,task_id,author,role,body,internal,created_at) VALUES(?,?,?,?,?,?,?)').bind(r.id,r.task_id,r.author,r.role,r.body,r.internal?1:0,r.created_at));}
+ for(const r of extra.project_reviews){valid(text(r.id,100)&&tasks.has(r.task_id)&&text(r.actor,254)&&text(r.email,254)&&text(r.role,30)&&['Aprobado','Cambios solicitados'].includes(r.decision as string)&&text(r.created_at,100));statements.push(db.prepare('INSERT INTO project_reviews(id,task_id,actor,email,role,decision,created_at) VALUES(?,?,?,?,?,?,?)').bind(r.id,r.task_id,r.actor,r.email,r.role,r.decision,r.created_at));}
  if(typeof (backup as any).owner_name==='string')statements.push(db.prepare('UPDATE workspace SET owner_name=? WHERE id=1').bind((backup as any).owner_name.trim().slice(0,80)));
  if(statements.length)await db.batch(statements);
 }
