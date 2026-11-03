@@ -59,7 +59,10 @@ export function normalizeTask(raw:any,phaseIds:string[]){
 }
 export function parseJson<T>(v:unknown,fallback:T):T{try{const x=typeof v==='string'?JSON.parse(v):v;return x??fallback;}catch{return fallback;}}
 export function projectPhases(p:any):Phase[]{const x=parseJson<Phase[]>(p?.phases,[]);return Array.isArray(x)?x:[];}
+/** Fase actual: la más avanzada con trabajo en curso; si no hay, la primera con tareas pendientes; si no, por fechas. */
 export function currentPhaseIndex(phases:Phase[],tasks:any[],today=new Date().toISOString().slice(0,10)){
+ const active=phases.map((ph,i)=>tasks.some(t=>t.phase_id===ph.id&&['doing','wait','review'].includes(t.column_key))?i:-1).filter(i=>i>=0);
+ if(active.length)return Math.max(...active);
  const open=phases.findIndex(ph=>tasks.some(t=>t.phase_id===ph.id&&t.column_key!=='done'));
  if(open>=0)return open;
  const dated=phases.findIndex(ph=>ph.end&&ph.end>=today);
