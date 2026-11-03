@@ -468,3 +468,18 @@ const pb=await (await api.GET(new Request('https://test.local/api/workspace?expo
 for(const t of ['member_clients','project_reviews','project_comments','project_tasks','projects','reviews','comments','buffer_jobs','posts','members','key_dates','buffer_bindings','clients'])sql.exec(`DELETE FROM ${t}`);await post({action:'import',backup:pb});
 assert.deepEqual((await K(get)()).permissions,['posts_edit','posts_send','tasks_board','tasks_edit','internal_notes','key_dates','projects_edit']);assert.deepEqual((await L(get)()).permissions,[]);
 console.log('Passed: collaborator profiles: Lector only views and comments, sending to review needs its own permission, internal notes and key dates only with permission and on their brands, board and tasks for Productor, project editing for Coordinador with hidden fields, nobody deletes, and permissions kept in backups.');
+// Pending comments can be marked as resolved without replying.
+await post({action:'client',name:'Marca R',color:'#666666'});const mr=sqlClients().find(c=>c.name==='Marca R');
+await post({action:'member',email:'cli@r.es',role:'client',client_id:mr.id});await post({action:'member',email:'col@r.es',role:'collaborator',client_id:mr.id,permissions:[]});
+const CR=(fn)=>as('cli@r.es',fn),CO=(fn)=>as('col@r.es',fn);
+await post({action:'post',client_id:mr.id,title:'R1',copy:'',channel:'Instagram',format:'Imagen',date:'2030-04-01T10:00',status:'En revisión',asset:''});await post({action:'post',client_id:mr.id,title:'R2',copy:'',channel:'Instagram',format:'Imagen',date:'2030-04-02T10:00',status:'Borrador',asset:''});
+const r1=(await get()).posts.find(x=>x.title==='R1'),r2=(await get()).posts.find(x=>x.title==='R2');
+await CR(post)({action:'comment',id:r1.id,body:'¿Podemos cambiar la foto?'});await post({action:'comment',id:r1.id,body:'Nota',internal:true});
+const unresolved=async()=>sql.prepare('SELECT COUNT(*) n FROM comments WHERE post_id=? AND resolved=0 AND internal=0').get(r1.id).n;
+assert.equal(await unresolved(),1);
+await L(post)({action:'resolveComments',id:r1.id},404);await CR(post)({action:'resolveComments',id:r2.id},404);await post({action:'resolveComments',id:'nope'},404);
+await CO(post)({action:'resolveComments',id:r1.id});assert.equal(await unresolved(),0,'Even a Lector collaborator can resolve');assert.equal(sql.prepare('SELECT resolved FROM comments WHERE post_id=? AND internal=1').get(r1.id).resolved,0,'Internal notes untouched');
+await post({action:'comment',id:r1.id,body:'Cambiada'});assert.equal(await unresolved(),1,'A new comment reopens the conversation');
+await CR(post)({action:'resolveComments',id:r1.id});assert.equal(await unresolved(),0);await CR(post)({action:'comment',id:r1.id,body:'Otra cosa'});await post({action:'resolveComments',id:r1.id},200);
+await post({action:'comment',id:r1.id,body:'Para la vista previa'});const pr=await api.POST(new Request('https://test.local/api/workspace?preview='+mr.id,{method:'POST',headers:{'Content-Type':'application/json','Origin':'https://test.local'},body:JSON.stringify({action:'resolveComments',id:r1.id})}));assert.equal(pr.status,200);assert.equal(await unresolved(),0);
+console.log('Passed: pending comments marked as resolved without replying by staff, collaborators and the client (also from preview), scoped to their brand and visible posts, internal notes untouched, and new comments reopen the conversation.');
