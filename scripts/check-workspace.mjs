@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const sql=new DatabaseSync(':memory:');
-for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql','0008_key_dates_internal_notes.sql','0009_reel_buffer_music.sql','0010_buffer_linkedin.sql','0011_projects.sql','0012_comment_edits.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
+for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql','0008_key_dates_internal_notes.sql','0009_reel_buffer_music.sql','0010_buffer_linkedin.sql','0011_projects.sql','0012_comment_edits.sql','0013_member_clients.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{
  constructor(q,args=[]){this.q=q;this.args=args;}
  bind(...args){return new Statement(this.q,args);}
@@ -393,3 +393,29 @@ const broken={...projBackup,project_tasks:[{...projBackup.project_tasks[0],proje
 await post({action:'deleteProject',id:proj.id,confirmName:'otro'},400);await team(post)({action:'deleteProject',id:proj.id,confirmName:'Empaques café'},403);
 pc=(await get()).clients.find(c=>c.id===pc.id);await post({action:'deleteClient',id:pc.id,confirmName:pc.name});for(const t of ['projects','project_tasks','project_comments','project_reviews'])assert.equal(sql.prepare(`SELECT COUNT(*) n FROM ${t}`).get().n,0,t+' removed with the client');
 console.log('Passed: projects, tasks, comments and reviews kept in backups, invalid project backups rejected, project deletion owner-only, and client deletion removes its projects.');
+// A collaborator can be assigned several brands; each brand keeps its own sections.
+await post({action:'client',name:'Marca X',color:'#111111'});await post({action:'client',name:'Marca Y',color:'#222222'});await post({action:'client',name:'Marca Z',color:'#333333'});
+const [mx,my,mz]=['Marca X','Marca Y','Marca Z'].map(n=>sqlClients().find(c=>c.name===n));function sqlClients(){return sql.prepare('SELECT * FROM clients').all();}
+await post({action:'client',id:my.id,name:my.name,color:my.color,profile:{sections:{social:false,projects:true}}});
+const multi=(fn)=>as('multi@marcas.es',fn);
+await post({action:'member',email:'multi@marcas.es',role:'collaborator',client_ids:[]},400);
+await post({action:'member',email:'multi@marcas.es',role:'collaborator',client_ids:[mx.id,'no-existe']},400);
+await post({action:'member',email:'multi@marcas.es',role:'collaborator',client_ids:[mx.id,my.id,mx.id],name:'Multi'});
+assert.match(welcomes.at(-1).brand,/Marca X, Marca Y|Marca Y, Marca X/);
+let mm=(await get()).members.find(m=>m.email==='multi@marcas.es');assert.equal(mm.client_id,mx.id);assert.deepEqual(mm.client_ids,[mx.id,my.id]);
+const postX={action:'post',client_id:mx.id,title:'En X',copy:'',channel:'Instagram',format:'Imagen',date:'2030-02-01T10:00',status:'Borrador',asset:''};
+await multi(post)(postX);await multi(post)({...postX,client_id:my.id,title:'En Y'},403);await multi(post)({...postX,client_id:mz.id,title:'En Z'},403);
+await post({...postX,client_id:mz.id,title:'Solo Z'});await post({action:'project',client_id:my.id,name:'Web Y',phases});await post({action:'project',client_id:mz.id,name:'Web Z',phases});
+let seen=await multi(get)();assert.deepEqual(seen.clients.map(c=>c.id),[mx.id,my.id]);assert.deepEqual(seen.posts.map(p=>p.title),['En X']);assert.deepEqual(seen.projects.map(p=>p.name),['Web Y']);assert.equal(seen.members.length,0);
+const zPost=(await get()).posts.find(p=>p.title==='Solo Z');await multi(post)({action:'comment',id:zPost.id,body:'x'},403);
+await post({action:'member',email:'multi@marcas.es',role:'collaborator',client_ids:[mz.id,mx.id],name:'Multi'});seen=await multi(get)();assert.deepEqual(seen.clients.map(c=>c.id).sort(),[mx.id,mz.id].sort());assert.deepEqual(seen.posts.map(p=>p.title).sort(),['En X','Solo Z']);assert.deepEqual(seen.projects.map(p=>p.name),['Web Z']);
+await multi(post)({action:'comment',id:zPost.id,body:'Comentario en Z'});
+// Clients stay on one brand even if a list is sent.
+await post({action:'member',email:'uno@marcas.es',role:'client',client_id:mx.id,client_ids:[mx.id,mz.id]});assert.deepEqual((await as('uno@marcas.es',get)()).clients.map(c=>c.id),[mx.id]);
+// Backups keep the extra brands; deleting the main brand moves the collaborator to the next one.
+const mb=await (await api.GET(new Request('https://test.local/api/workspace?export=1'))).json();assert.deepEqual(mb.member_clients.map(r=>r.client_id),[mx.id]);
+await post({action:'deleteClient',id:mz.id,confirmName:'Marca Z'});mm=(await get()).members.find(m=>m.email==='multi@marcas.es');assert.equal(mm.client_id,mx.id);assert.deepEqual(mm.client_ids,[mx.id]);assert.equal(sql.prepare('SELECT COUNT(*) n FROM member_clients').get().n,0);
+await post({action:'removeMember',email:'multi@marcas.es'});await post({action:'member',email:'multi@marcas.es',role:'collaborator',client_ids:[my.id,mx.id]});await post({action:'removeMember',email:'multi@marcas.es'});assert.equal(sql.prepare('SELECT COUNT(*) n FROM member_clients').get().n,0);
+for(const t of ['member_clients','project_reviews','project_comments','project_tasks','projects','reviews','comments','buffer_jobs','posts','members','key_dates','buffer_bindings','clients'])sql.exec(`DELETE FROM ${t}`);await post({action:'import',backup:{...mb,member_clients:[...mb.member_clients,{email:'nadie@x.es',client_id:mx.id}]}});
+mm=(await get()).members.find(m=>m.email==='multi@marcas.es');assert.deepEqual(mm.client_ids,[mz.id,mx.id]);assert.equal(sql.prepare('SELECT COUNT(*) n FROM member_clients').get().n,1,'Rows for unknown collaborators are skipped');
+console.log('Passed: collaborators with several brands see and edit only those brands, each brand keeps its own sections, backups keep the extra brands, and deleting a brand or the access cleans them up.');
