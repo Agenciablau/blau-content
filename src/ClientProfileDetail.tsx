@@ -2,7 +2,7 @@ import {ExternalLink,X,Users,CalendarDays,FolderOpen,Pencil,Trash2} from 'lucide
 import {readClientProfile,socialNetworks,commitmentCategories,clientSectionLabels} from '../shared/client-profile';
 import {monthlyCommitmentProgress} from '../shared/monthly-commitments';
 export default function ClientProfileDetail({client,members,posts,month,owner,onClose,onEdit,onAddAccess,onCalendar,onDelete,onEditUser,onRemoveUser,busy}:{onEditUser:(u:any)=>void;onRemoveUser:(u:any)=>void;busy?:boolean;client:any;members:any[];posts:any[];month:string;owner:boolean;onClose:()=>void;onEdit:()=>void;onAddAccess:()=>void;onCalendar:()=>void;onDelete:()=>void}){
- const p=readClientProfile(client.profile),users=members.filter(m=>['client','collaborator'].includes(m.role)&&m.client_id===client.id),socials=socialNetworks.filter(([key])=>p.socials[key]);
+ const p=readClientProfile(client.profile),users=members.filter(m=>['client','collaborator'].includes(m.role)&&(m.client_id===client.id||m.client_ids?.includes(client.id))),socials=socialNetworks.filter(([key])=>p.socials[key]);
  const own=posts.filter(x=>x.client_id===client.id),monthPosts=own.filter(x=>(x.date||'').slice(0,7)===month),progress=monthlyCommitmentProgress([{id:client.id,goals:p.monthly_goals}],posts,month);
  const [y,m]=month.split('-').map(Number),monthName=new Date(y,m-1,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'});
  const host=(u:string)=>{try{return new URL(u).hostname.replace(/^www\./,'');}catch{return u;}};

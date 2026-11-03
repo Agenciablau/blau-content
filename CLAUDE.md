@@ -30,7 +30,7 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 ## Modelo de permisos (no romper)
 
 - Roles: `owner` (administrador = `ADMIN_EMAIL`/propietario del espacio), `team`, `client`, `collaborator`, guardados en `members`.
-- `client` y `collaborator` solo ven su marca. `client` no ve Idea ni Borrador.
+- `client` y `collaborator` solo ven su marca. Un `collaborator` puede tener varias: la principal en `members.client_id` y las demás en `member_clients` (se exporta e importa; al eliminar la marca principal pasa a la siguiente). Las secciones se aplican por marca. Con varias marcas tiene el selector de cliente de la barra lateral. `client` no ve Idea ni Borrador.
 - Clientes y colaboradores solo ven comentarios y revisiones posteriores a `posts.client_changed_at`.
 - Las notas internas (`comments.internal=1`) solo las escriben y ven `owner` y `team`; el Worker las excluye para cliente, colaborador, vista previa y resúmenes de correo.
 - Secciones del cliente (`profile.sections`, `social` y `projects`, por defecto las dos; solo `owner` las cambia y al menos una debe quedar activa): sin `social`, el Worker no devuelve publicaciones, comentarios, revisiones ni fechas clave a cliente y colaborador, rechaza sus acciones de publicaciones y el cliente no recibe resúmenes; sin `projects`, no ve ni actúa sobre proyectos.

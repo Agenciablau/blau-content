@@ -1,27 +1,29 @@
 import {normalizeProject,normalizeTask,projectPhases,columnKeys} from '../shared/projects';
-type Ctx={db:D1Database;role:string;clientId?:string|null;user:{email:string;displayName:string};preview:boolean};
+type Ctx={db:D1Database;role:string;clientIds:string[];user:{email:string;displayName:string};preview:boolean};
 const fail=(error:string,status=400)=>Response.json({error},{status});
 const str=(x:any,max=5000)=>typeof x==='string'?x.trim().slice(0,max):'';
 const version=()=>new Date().toISOString()+':'+crypto.randomUUID();
 export const projectActions=['project','deleteProject','task','moveTask','deleteTask','taskComment','taskReview','taskSent','taskCommentEdit'];
-export async function loadProjects(db:D1Database,role:string,clientId?:string|null,canSee=true){
- const scoped=role==='client'||role==='collaborator';
- if(scoped&&!canSee)return {projects:[],projectTasks:[],projectComments:[],projectReviews:[]};
- const projects=(await db.prepare('SELECT * FROM projects'+(scoped?' WHERE client_id=?':'')+' ORDER BY created_at').bind(...(scoped?[clientId]:[])).all<any>()).results.map(p=>scoped?{...p,fields:JSON.stringify(JSON.parse(p.fields||'[]').filter((f:any)=>f.visible))}:p);
- const taskScope=scoped?' WHERE visible=1 AND project_id IN (SELECT id FROM projects WHERE client_id=?)':'';
- const tasks=(await db.prepare('SELECT * FROM project_tasks'+taskScope+' ORDER BY position,created_at').bind(...(scoped?[clientId]:[])).all()).results;
+const marks=(ids:string[])=>`IN (${ids.map(()=>'?').join(',')||'NULL'})`;
+/** clientIds: marcas con proyectos visibles para cliente o colaborador (null para el equipo). */
+export async function loadProjects(db:D1Database,role:string,clientIds:string[]|null){
+ const scoped=role==='client'||role==='collaborator',ids=clientIds??[];
+ if(scoped&&!ids.length)return {projects:[],projectTasks:[],projectComments:[],projectReviews:[]};
+ const projects=(await db.prepare('SELECT * FROM projects'+(scoped?' WHERE client_id '+marks(ids):'')+' ORDER BY created_at').bind(...(scoped?ids:[])).all<any>()).results.map(p=>scoped?{...p,fields:JSON.stringify(JSON.parse(p.fields||'[]').filter((f:any)=>f.visible))}:p);
+ const taskScope=scoped?' WHERE visible=1 AND project_id IN (SELECT id FROM projects WHERE client_id '+marks(ids)+')':'';
+ const tasks=(await db.prepare('SELECT * FROM project_tasks'+taskScope+' ORDER BY position,created_at').bind(...(scoped?ids:[])).all()).results;
  const sub=scoped?' WHERE task_id IN (SELECT id FROM project_tasks'+taskScope+')':'';
- const comments=(await db.prepare('SELECT * FROM project_comments'+sub+(scoped?' AND internal=0':'')+' ORDER BY created_at').bind(...(scoped?[clientId]:[])).all()).results;
- const reviews=(await db.prepare('SELECT id,task_id,actor,role,decision,created_at FROM project_reviews'+sub+' ORDER BY created_at DESC').bind(...(scoped?[clientId]:[])).all()).results;
+ const comments=(await db.prepare('SELECT * FROM project_comments'+sub+(scoped?' AND internal=0':'')+' ORDER BY created_at').bind(...(scoped?ids:[])).all()).results;
+ const reviews=(await db.prepare('SELECT id,task_id,actor,role,decision,created_at FROM project_reviews'+sub+' ORDER BY created_at DESC').bind(...(scoped?ids:[])).all()).results;
  return {projects,projectTasks:tasks,projectComments:comments,projectReviews:reviews};
 }
 export async function projectAction(c:Ctx,b:any):Promise<Response|null>{
  const {db}=c,staff=c.role==='owner'||c.role==='team',scoped=!staff;
- if(scoped){const cl=await db.prepare('SELECT profile FROM clients WHERE id=?').bind(c.clientId??'').first<{profile:string}>();let s:any={};try{s=JSON.parse(cl?.profile||'{}').sections??{};}catch{}if(!cl||s.projects===false)return fail('Tu acceso no incluye proyectos.',403);}
+ if(scoped&&!c.clientIds.length)return fail('Tu acceso no incluye proyectos.',403);
  if(b.action==='taskCommentEdit'){
   const body=str(b.body);if(!body)return fail('Escribe un comentario.');
   const cm=await db.prepare('SELECT pc.id,pc.author,pc.internal,t.visible,p.client_id FROM project_comments pc JOIN project_tasks t ON t.id=pc.task_id JOIN projects p ON p.id=t.project_id WHERE pc.id=?').bind(str(b.id,100)).first<any>();
-  if(!cm||scoped&&(cm.client_id!==c.clientId||!cm.visible||cm.internal))return fail('Comentario no encontrado.',404);
+  if(!cm||scoped&&(!c.clientIds.includes(cm.client_id)||!cm.visible||cm.internal))return fail('Comentario no encontrado.',404);
   if(c.preview||String(cm.author).toLowerCase()!==c.user.email.toLowerCase())return fail('Solo puedes editar tus propios comentarios.',403);
   await db.prepare('UPDATE project_comments SET body=?,edited_at=? WHERE id=?').bind(body,new Date().toISOString(),cm.id).run();
   return null;
@@ -56,7 +58,7 @@ export async function projectAction(c:Ctx,b:any):Promise<Response|null>{
  }
  const task=b.id?await db.prepare('SELECT t.*,p.client_id,p.phases,p.options FROM project_tasks t JOIN projects p ON p.id=t.project_id WHERE t.id=?').bind(str(b.id,100)).first<any>():null;
  if(b.id&&!task)return fail('Tarea no encontrada.',404);
- if(scoped&&task&&(task.client_id!==c.clientId||!task.visible))return fail('Tarea no encontrada.',404);
+ if(scoped&&task&&(!c.clientIds.includes(task.client_id)||!task.visible))return fail('Tarea no encontrada.',404);
  const now=new Date().toISOString();
  if(b.action==='task'){
   if(!staff)return fail('Solo el equipo puede editar tareas.',403);
