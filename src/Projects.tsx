@@ -6,6 +6,14 @@ import {drivePreviewUrl} from './drive-preview';
 import {driveThumbnailUrl} from './ReviewThumb';
 import CommentBody from './CommentBody';
 const day=()=>new Date().toISOString().slice(0,10);
+/** Retraso: tareas con fecha límite pasada sin terminar y fases cuya fecha de fin ya pasó con trabajo pendiente. */
+export function projectDelay(p:any,tasks:any[],today=day()){
+ if(p.status==='done')return null;
+ const late=tasks.filter((t:any)=>t.due&&t.due<today&&t.column_key!=='done'),phases=projectPhases(p).filter(ph=>ph.end&&ph.end<today&&tasks.some((t:any)=>t.phase_id===ph.id&&t.column_key!=='done'));
+ if(!late.length&&!phases.length)return null;
+ const ago=(d:string)=>Math.round((Date.parse(today)-Date.parse(d))/864e5);
+ return {late,phases,days:Math.max(...late.map((t:any)=>ago(t.due)),...phases.map(ph=>ago(ph.end)))};
+}
 const fd=(v:string,year=false)=>v?new Date(v.slice(0,10)+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'short',...(year?{year:'numeric'}:{})}):'Sin fecha';
 const ago=(v:string)=>new Date(v).toLocaleDateString('es-ES',{day:'numeric',month:'short',timeZone:'Europe/Madrid'});
 const colLabel=(k:string)=>taskColumns.find(c=>c[0]===k)?.[1]??k;
@@ -31,14 +39,14 @@ export default function ProjectPage(props:Props){
  </div>;
 }
 function Board({data,project:p,busy,error,mutate}:Props){
- const tasks=projectTasksOf(data,p.id),phases=projectPhases(p),cur=currentPhaseIndex(phases,tasks),pct=progress(tasks),pending=clientPending(p,tasks);
+ const tasks=projectTasksOf(data,p.id),phases=projectPhases(p),cur=currentPhaseIndex(phases,tasks),pct=progress(tasks),pending=clientPending(p,tasks),delay=projectDelay(p,tasks),[lateOnly,setLateOnly]=useState(false);
  const edit=canDo(data,'tasks_edit'),[phase,setPhase]=useState('all'),[open,setOpen]=useState<any>(null),[over,setOver]=useState(''),drag=useRef<any>(null);
- const shown=tasks.filter((t:any)=>phase==='all'||t.phase_id===phase);
+ const shown=tasks.filter((t:any)=>(phase==='all'||t.phase_id===phase)&&(!lateOnly||delay?.late.includes(t)));
  const comments=(id:string)=>(data.projectComments??[]).filter((c:any)=>c.task_id===id).length;
  async function drop(col:string){if(!edit)return;const t=drag.current;drag.current=null;setOver('');if(!t||t.column_key===col)return;await mutate({action:'moveTask',id:t.id,column_key:col,updated_at:t.updated_at},`Tarea movida a «${colLabel(col)}»`);}
  const live=open?.id?tasks.find((t:any)=>t.id===open.id):null;
  return <>
-  <div className="pj-summary"><div className="pj-tile"><small>Fases</small><div className="pj-phases">{phases.map((ph,i)=><div key={ph.id} className={'pj-phase '+(i<cur?'done':i===cur?'now':'')} title={`${ph.name} · ${fd(ph.start)} – ${fd(ph.end)}`}><i/><span>{ph.name}</span></div>)}</div></div><div className="pj-tile"><small>Avance</small><strong>{pct}%</strong><div className="pj-bar"><i style={{width:pct+'%'}}/></div></div><div className="pj-tile"><small>En manos del cliente</small><strong>{pending.length} {pending.length===1?'tarea':'tareas'}</strong></div></div>
+  <div className="pj-summary"><div className="pj-tile"><small>Fases</small><div className="pj-phases">{phases.map((ph,i)=><div key={ph.id} className={'pj-phase '+(i<cur?'done':i===cur?'now':'')} title={`${ph.name} · ${fd(ph.start)} – ${fd(ph.end)}`}><i/><span>{ph.name}</span></div>)}</div></div><div className="pj-tile"><small>Avance</small><strong>{pct}%</strong><div className="pj-bar"><i style={{width:pct+'%'}}/></div></div><div className="pj-tile"><small>En manos del cliente</small><strong>{pending.length} {pending.length===1?'tarea':'tareas'}</strong></div><div className={'pj-tile pj-delay'+(delay?' late':' ok')}><small>Plazos</small>{delay?<><strong>Con retraso · {delay.days} {delay.days===1?'día':'días'}</strong>{delay.phases.map(ph=><span key={ph.id}>{ph.name} terminaba el {fd(ph.end)}</span>)}{delay.late.length>0&&<button type="button" className="text-btn" onClick={()=>setLateOnly(!lateOnly)}>{lateOnly?'Ver todas las tareas':`${delay.late.length} ${delay.late.length===1?'tarea vencida':'tareas vencidas'}`}</button>}</>:<strong>Al día</strong>}</div></div>
   <div className="pj-toolbar"><div className="pj-chips" role="group" aria-label="Filtrar por fase"><button className="pj-chip" aria-pressed={phase==='all'} onClick={()=>setPhase('all')}>Todas las fases</button>{phases.map(ph=><button key={ph.id} className="pj-chip" aria-pressed={phase===ph.id} onClick={()=>setPhase(ph.id)}>{ph.name}</button>)}</div>{edit&&<button className="primary" onClick={()=>setOpen({phase_id:phase!=='all'?phase:phases[cur]?.id,column_key:'todo',visible:true})}><Plus size={16}/>Nueva tarea</button>}</div>
   <div className="pj-board-wrap"><div className="pj-board">{taskColumns.map(([key,label])=>{const list=shown.filter((t:any)=>t.column_key===key);return <section key={key} className={'pj-col '+key+(over===key?' drop':'')} aria-label={label} onDragOver={e=>{e.preventDefault();setOver(key);}} onDragLeave={()=>setOver(o=>o===key?'':o)} onDrop={e=>{e.preventDefault();drop(key);}}>
    <h3>{label}<b>{list.length}</b></h3>
