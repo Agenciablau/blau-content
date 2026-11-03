@@ -1,0 +1,2 @@
+ALTER TABLE comments ADD COLUMN edited_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE project_comments ADD COLUMN edited_at TEXT NOT NULL DEFAULT '';

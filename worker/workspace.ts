@@ -52,7 +52,7 @@ async function GET(req?:Request){
  const projectData=await loadProjects(c.db,c.role,c.clientId,sections.projects);
  const names=new Map<string,string>((await c.db.prepare("SELECT email,name FROM members WHERE name<>''").all<any>()).results.map((r:any)=>[r.email,r.name]));if(c.w.owner_name)names.set(c.w.email,c.w.owner_name);
  const named=(v:string)=>names.get(String(v??'').toLowerCase())||v;
- return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author)})),members:m.results,reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author)})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)}))},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),members:m.results,reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)}))},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
 async function POST(req:Request){
@@ -80,7 +80,15 @@ async function POST(req:Request){
  const staff=c.role==='owner'||c.role==='team',collaborator=c.role==='collaborator';
  if(collaborator&&(!c.clientId||!await c.db.prepare('SELECT id FROM clients WHERE id=?').bind(c.clientId).first()))return fail('Tu acceso no tiene una marca asignada válida.',403);
  if(projectActions.includes(b.action)){const r=await projectAction({db:c.db,role:c.role,clientId:c.clientId,user:c.user,preview:!!preview},b);return r??Response.json({ok:true});}
- if(['post','review','comment','delete'].includes(b.action)&&(c.role==='client'||collaborator)&&!readClientProfile((await c.db.prepare('SELECT profile FROM clients WHERE id=?').bind(c.clientId??'').first<any>())?.profile).sections.social)return fail('Tu acceso no incluye redes sociales.',403);
+ if(['post','review','comment','delete','editComment'].includes(b.action)&&(c.role==='client'||collaborator)&&!readClientProfile((await c.db.prepare('SELECT profile FROM clients WHERE id=?').bind(c.clientId??'').first<any>())?.profile).sections.social)return fail('Tu acceso no incluye redes sociales.',403);
+ if(b.action==='editComment'){
+  const body=str(b.body);if(!body)return fail('Escribe un comentario.');
+  const cm=await c.db.prepare('SELECT comments.id,comments.author,comments.internal,comments.created_at,posts.client_id,posts.client_changed_at FROM comments JOIN posts ON posts.id=comments.post_id WHERE comments.id=?').bind(str(b.id,100)).first<any>();
+  if(!cm||!staff&&(cm.client_id!==c.clientId||cm.internal||!(cm.created_at>(cm.client_changed_at??''))))return fail('Comentario no encontrado.',404);
+  if(String(cm.author).toLowerCase()!==c.user.email.toLowerCase())return fail('Solo puedes editar tus propios comentarios.',403);
+  await c.db.prepare('UPDATE comments SET body=?,edited_at=? WHERE id=?').bind(body,new Date().toISOString(),cm.id).run();
+  return Response.json({ok:true});
+ }
  if(b.action==='import'){
   if(c.role!=='owner')return fail('Solo el administrador puede importar.',403);
   try{await importBackup(c.db,b.backup,c.user);}catch(e){return fail(e instanceof Error?e.message:'No se pudo importar.');}

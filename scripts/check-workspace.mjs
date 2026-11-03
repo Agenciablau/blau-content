@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const sql=new DatabaseSync(':memory:');
-for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql','0008_key_dates_internal_notes.sql','0009_reel_buffer_music.sql','0010_buffer_linkedin.sql','0011_projects.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
+for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql','0008_key_dates_internal_notes.sql','0009_reel_buffer_music.sql','0010_buffer_linkedin.sql','0011_projects.sql','0012_comment_edits.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{
  constructor(q,args=[]){this.q=q;this.args=args;}
  bind(...args){return new Statement(this.q,args);}
@@ -354,6 +354,10 @@ assert.equal((await as('named@example.com',get)()).projects?.length??0,0,'Other 
 await post({action:'taskComment',id:hidden.id,body:'Interna',internal:true});await post({action:'taskComment',id:arte.id,body:'Nota del equipo',internal:true});await post({action:'taskComment',id:arte.id,body:'Mirad el arte'});
 mine=await cli(get)();assert.deepEqual(mine.projectComments.map(c=>c.body),['Mirad el arte'],'Internal notes and hidden-task comments stay private');
 await cli(post)({action:'taskComment',id:hidden.id,body:'hola'},404);await cli(post)({action:'taskComment',id:arte.id,body:'x',internal:true},403);await cli(post)({action:'taskComment',id:arte.id,body:'¿Podemos cambiar el color?'});
+mine=await cli(get)();const cc=mine.projectComments.find(c=>c.body==='¿Podemos cambiar el color?'),tc=mine.projectComments.find(c=>c.body==='Mirad el arte');assert.equal(cc.mine,true);assert.ok(!tc.mine);
+await cli(post)({action:'taskCommentEdit',id:tc.id,body:'hack'},403);await cli(post)({action:'taskCommentEdit',id:cc.id,body:''},400);await cli(post)({action:'taskCommentEdit',id:cc.id,body:'¿Y en azul?'});
+const ed=(await get()).projectComments.find(c=>c.id===cc.id);assert.equal(ed.body,'¿Y en azul?');assert.ok(ed.edited_at);assert.equal(ed.mine,false,'Only the author sees the edit button');
+const tnote=(await get()).projectComments.find(c=>c.body==='Nota del equipo');await cli(post)({action:'taskCommentEdit',id:tnote.id,body:'x'},404);await team(post)({action:'taskCommentEdit',id:tnote.id,body:'x'},403);await post({action:'taskCommentEdit',id:tnote.id,body:'Nota editada'});
 await cli(post)({action:'task',id:arte.id,updated_at:arte.updated_at,title:'Hack',phase_id:'f1'},403);await cli(post)({action:'moveTask',id:arte.id,updated_at:arte.updated_at,column_key:'done'},403);await col(post)({action:'taskReview',id:arte.id,updated_at:arte.updated_at,decision:'Aprobado'},403);
 await cli(post)({action:'taskReview',id:arte.id,updated_at:arte.updated_at,decision:'Cambios solicitados',body:''},400);await cli(post)({action:'taskReview',id:logos.id,updated_at:logos.updated_at,decision:'Aprobado'},400);
 await cli(post)({action:'taskReview',id:arte.id,updated_at:arte.updated_at,decision:'Cambios solicitados',body:'Más grande el logo'});all=await get();let arte2=all.projectTasks.find(t=>t.id===arte.id);assert.equal(arte2.column_key,'doing');assert.equal(all.projectReviews.find(r=>r.task_id===arte.id).decision,'Cambios solicitados');
@@ -369,13 +373,17 @@ const prof=JSON.parse(pc.profile);await team(post)({action:'client',id:pc.id,nam
 await post({action:'client',id:pc.id,name:pc.name,color:pc.color,profile:{...prof,sections:{social:false,projects:false}}},400);
 await post({action:'post',client_id:pc.id,title:'Post visible',copy:'',channel:'Instagram',format:'Imagen',date:'2030-01-10T10:00',status:'En revisión',asset:''});
 await post({action:'client',id:pc.id,name:pc.name,color:pc.color,profile:{...prof,sections:{social:true,projects:false}}});
+const pv=(await get()).posts.find(p=>p.title==='Post visible');await cli(post)({action:'comment',id:pv.id,body:'Primer comentario'});let pcm=(await cli(get)()).comments.find(c=>c.body==='Primer comentario');assert.equal(pcm.mine,true);
+await team(post)({action:'editComment',id:pcm.id,body:'x'},403);await cli(post)({action:'editComment',id:pcm.id,body:'Comentario corregido'});pcm=(await get()).comments.find(c=>c.id===pcm.id);assert.equal(pcm.body,'Comentario corregido');assert.ok(pcm.edited_at);
+await post({action:'comment',id:pv.id,body:'Interna',internal:true});const intc=(await get()).comments.find(c=>c.body==='Interna'&&c.post_id===pv.id);await cli(post)({action:'editComment',id:intc.id,body:'x'},404);await post({action:'editComment',id:intc.id,body:'Interna corregida'});
+assert.ok(!(await get(200,pc.id)).comments.some(c=>c.mine),'Preview never offers editing');
 mine=await cli(get)();assert.equal(mine.projects.length,0);assert.equal(mine.projectTasks.length,0);assert.ok(mine.posts.length>0);await cli(post)({action:'taskComment',id:arte.id,body:'x'},403);
 assert.equal((await get(200,pc.id)).projects.length,0,'Preview follows the client sections');
 await post({action:'client',id:pc.id,name:pc.name,color:pc.color,profile:{...prof,sections:{social:false,projects:true}}});
 mine=await cli(get)();assert.equal(mine.posts.length,0);assert.equal(mine.comments.length,0);assert.equal(mine.projects.length,1);const vp=mine.posts;
-const anyPost=(await get()).posts.find(p=>p.client_id===pc.id);await cli(post)({action:'comment',id:anyPost.id,body:'hola'},403);await col(post)({action:'post',client_id:pc.id,title:'X',copy:'',channel:'Instagram',format:'Imagen',date:'2030-01-10T10:00',status:'Borrador',asset:''},403);
+const anyPost=(await get()).posts.find(p=>p.client_id===pc.id);await cli(post)({action:'comment',id:anyPost.id,body:'hola'},403);await cli(post)({action:'editComment',id:pcm.id,body:'y'},403);await col(post)({action:'post',client_id:pc.id,title:'X',copy:'',channel:'Instagram',format:'Imagen',date:'2030-01-10T10:00',status:'Borrador',asset:''},403);
 assert.equal((await team(get)()).projects.length>=1,true,'The team always sees every project');
-console.log('Passed: projects created by staff with templates, fields and tasks, hidden tasks/fields/internal notes kept from clients, client reviews and sent tasks, optimistic versions, and per-client sections enforced in the Worker.');
+console.log('Passed: authors edit only their own comments and task comments, hidden/internal ones stay out of reach, and the edit is marked. Projects created by staff with templates, fields and tasks, hidden tasks/fields/internal notes kept from clients, client reviews and sent tasks, optimistic versions, and per-client sections enforced in the Worker.');
 // Projects survive backups and client deletion removes them.
 const projBackup=await (await api.GET(new Request('https://test.local/api/workspace?export=1'))).json();assert.equal(projBackup.projects.length,1);assert.equal(projBackup.project_tasks.length,4);assert.ok(projBackup.project_reviews.length>=2);
 for(const t of ['project_reviews','project_comments','project_tasks','projects','reviews','comments','buffer_jobs','posts','members','key_dates','buffer_bindings','clients'])sql.exec(`DELETE FROM ${t}`);await post({action:'import',backup:projBackup});

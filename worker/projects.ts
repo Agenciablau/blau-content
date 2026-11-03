@@ -3,7 +3,7 @@ type Ctx={db:D1Database;role:string;clientId?:string|null;user:{email:string;dis
 const fail=(error:string,status=400)=>Response.json({error},{status});
 const str=(x:any,max=5000)=>typeof x==='string'?x.trim().slice(0,max):'';
 const version=()=>new Date().toISOString()+':'+crypto.randomUUID();
-export const projectActions=['project','deleteProject','task','moveTask','deleteTask','taskComment','taskReview','taskSent'];
+export const projectActions=['project','deleteProject','task','moveTask','deleteTask','taskComment','taskReview','taskSent','taskCommentEdit'];
 export async function loadProjects(db:D1Database,role:string,clientId?:string|null,canSee=true){
  const scoped=role==='client'||role==='collaborator';
  if(scoped&&!canSee)return {projects:[],projectTasks:[],projectComments:[],projectReviews:[]};
@@ -18,6 +18,14 @@ export async function loadProjects(db:D1Database,role:string,clientId?:string|nu
 export async function projectAction(c:Ctx,b:any):Promise<Response|null>{
  const {db}=c,staff=c.role==='owner'||c.role==='team',scoped=!staff;
  if(scoped){const cl=await db.prepare('SELECT profile FROM clients WHERE id=?').bind(c.clientId??'').first<{profile:string}>();let s:any={};try{s=JSON.parse(cl?.profile||'{}').sections??{};}catch{}if(!cl||s.projects===false)return fail('Tu acceso no incluye proyectos.',403);}
+ if(b.action==='taskCommentEdit'){
+  const body=str(b.body);if(!body)return fail('Escribe un comentario.');
+  const cm=await db.prepare('SELECT pc.id,pc.author,pc.internal,t.visible,p.client_id FROM project_comments pc JOIN project_tasks t ON t.id=pc.task_id JOIN projects p ON p.id=t.project_id WHERE pc.id=?').bind(str(b.id,100)).first<any>();
+  if(!cm||scoped&&(cm.client_id!==c.clientId||!cm.visible||cm.internal))return fail('Comentario no encontrado.',404);
+  if(c.preview||String(cm.author).toLowerCase()!==c.user.email.toLowerCase())return fail('Solo puedes editar tus propios comentarios.',403);
+  await db.prepare('UPDATE project_comments SET body=?,edited_at=? WHERE id=?').bind(body,new Date().toISOString(),cm.id).run();
+  return null;
+ }
  if(b.action==='project'){
   if(!staff)return fail('Solo el equipo puede gestionar proyectos.',403);
   let p;try{p=normalizeProject(b);}catch(e){return fail(e instanceof Error?e.message:'Datos del proyecto no válidos.');}
