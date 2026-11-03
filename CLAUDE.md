@@ -39,7 +39,7 @@ El prototipo de `contento-calendario.elatedgiant9.chatgpt.site` es un proyecto s
 - Fechas clave (`key_dates`): solo `owner` y `team` las gestionan; cliente y colaborador ven las globales (`client_id` nulo) y las de su marca. Los días señalados genéricos están en `shared/key-dates.ts`.
 - `profile.drive_folder_url` se elimina de la respuesta para quien no sea `owner`; solo `owner` lo edita.
 - Solo `owner` cambia compromisos mensuales, gestiona accesos, exporta, importa, elimina clientes y reasigna publicaciones.
-- `collaborator` crea, edita y envía a revisión en su marca, y comenta; no aprueba, no solicita cambios, no elimina.
+- `collaborator`: siempre ve sus marcas y comenta; nunca aprueba, solicita cambios, marca tareas del cliente como enviadas, elimina ni gestiona accesos. Lo demás depende de `members.permissions` (lista JSON, `shared/collaborator-access.ts`; vacío = Redactor): `posts_edit`, `posts_send`, `tasks_board` (todas las tareas), `tasks_edit` (crear, editar, mover), `tasks_review`, `internal_notes`, `key_dates` (solo de sus marcas), `projects_edit` (ve también los campos ocultos). Perfiles: Lector, Redactor, Productor y Coordinador. El Worker aplica cada permiso; se exportan e importan.
 - Toda comprobación de permisos se hace en el Worker. La interfaz solo oculta.
 
 ## Comportamientos que deben mantenerse
