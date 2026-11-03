@@ -76,7 +76,7 @@ async function POST(req:Request){
  let b:any;try{b=await req.json();}catch{return fail('Datos no válidos.');}
  if(!b||typeof b!=='object')return fail('Datos no válidos.');
  const extra:any={};
- if(preview&&!['review','comment','taskComment','taskReview','taskSent'].includes(b.action))return fail('Desde la vista de cliente solo puedes comentar, revisar o marcar tareas como enviadas.',403);
+ if(preview&&!['review','comment','resolveComments','taskComment','taskReview','taskSent'].includes(b.action))return fail('Desde la vista de cliente solo puedes comentar, revisar o marcar tareas como enviadas.',403);
  if(b.action==='init'){
   if(c.user.email!==env.ADMIN_EMAIL?.trim().toLowerCase())return fail('Solo el administrador configurado puede crear el espacio.',403);
   if(c.w)return fail('El espacio ya está configurado.',409);
@@ -90,7 +90,13 @@ async function POST(req:Request){
  const own=staff?null:await scopeOf(c.db,c.clientIds),soc=own?.social??[];
  if(collaborator&&!own?.rows.length)return fail('Tu acceso no tiene una marca asignada válida.',403);
  if(projectActions.includes(b.action)){const r=await projectAction({db:c.db,role:c.role,clientIds:own?.projects??[],perms:c.perms,user:c.user,preview:!!preview},b);return r??Response.json({ok:true});}
- if(['post','review','comment','delete','editComment'].includes(b.action)&&own&&!soc.length)return fail('Tu acceso no incluye redes sociales.',403);
+ if(['post','review','comment','delete','editComment','resolveComments'].includes(b.action)&&own&&!soc.length)return fail('Tu acceso no incluye redes sociales.',403);
+ if(b.action==='resolveComments'){
+  const post=await c.db.prepare('SELECT id,client_id,status,client_changed_at FROM posts WHERE id=?').bind(str(b.id,100)).first<any>();
+  if(!post||!staff&&(!soc.includes(post.client_id)||c.role==='client'&&['Idea','Borrador'].includes(post.status)))return fail('Publicación no encontrada.',404);
+  await c.db.prepare(`UPDATE comments SET resolved=1 WHERE post_id=? AND internal=0 AND resolved=0${staff?'':' AND created_at>?'}`).bind(post.id,...(staff?[]:[post.client_changed_at??''])).run();
+  return Response.json({ok:true});
+ }
  if(b.action==='editComment'){
   const body=str(b.body);if(!body)return fail('Escribe un comentario.');
   const cm=await c.db.prepare('SELECT comments.id,comments.author,comments.internal,comments.created_at,posts.client_id,posts.client_changed_at FROM comments JOIN posts ON posts.id=comments.post_id WHERE comments.id=?').bind(str(b.id,100)).first<any>();
