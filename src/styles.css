@@ -527,3 +527,5 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .cpd-email b{display:block;font-size:14px;color:var(--blau-ink)}
 .cpd-user-actions{display:inline-flex;align-items:center;gap:2px;margin-left:4px}
 .cpd-user-actions .icon-btn:hover{background:#fdecec;color:#a33b3b}
+.comment-meta{display:flex;gap:10px;align-items:center;margin-top:4px}.comment-meta small{font-size:11px;color:var(--blau-muted)}
+.comment-edit{display:flex;flex-direction:column;gap:6px;margin-top:4px}.comment-edit textarea{font-size:13px;padding:8px 10px}.comment-edit>div{display:flex;gap:12px;justify-content:flex-end}
