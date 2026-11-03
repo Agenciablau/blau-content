@@ -1,10 +1,11 @@
 import {useState,useEffect,useRef} from 'react';
-import {Pencil,Plus,Eye,EyeOff,CheckSquare,MessageCircle,X,ExternalLink,Check,Send,Trash2,Lock,Clock3,ImageOff,LayoutGrid,UserRound,Monitor,ChevronDown,Link2} from 'lucide-react';
+import {Pencil,Plus,Eye,EyeOff,CheckSquare,MessageCircle,X,ExternalLink,Check,Send,Trash2,Lock,Clock3,ImageOff,LayoutGrid,UserRound,Monitor,ChevronDown,Link2,NotebookPen} from 'lucide-react';
 import {taskColumns,projectStatuses,deliverableViews,parseJson,projectPhases,currentPhaseIndex,progress,defaultOptions,type Phase,type Field,type ChecklistItem} from '../shared/projects';
 import {materialLinks} from '../shared/material-links';
 import {drivePreviewUrl} from './drive-preview';
 import {driveThumbnailUrl} from './ReviewThumb';
 import CommentBody from './CommentBody';
+import ProjectNotes from './ProjectNotes';
 const day=()=>new Date().toISOString().slice(0,10);
 /** Retraso: tareas con fecha límite pasada sin terminar y fases cuya fecha de fin ya pasó con trabajo pendiente. */
 export function projectDelay(p:any,tasks:any[],today=day()){
@@ -31,11 +32,11 @@ const canDo=(data:any,k:string)=>data.role==='owner'||data.role==='team'||data.r
 type Props={data:any;project:any;busy:boolean;error:string;mutate:(body:any,msg:string)=>Promise<any>;onEdit:()=>void};
 export default function ProjectPage(props:Props){
  const {data,project:p}=props,staff=data.role==='owner'||data.role==='team',board=canDo(data,'tasks_board');
- const [tab,setTab]=useState<'board'|'client'>('board');
+ const [tab,setTab]=useState<'board'|'notes'|'client'>('board'),notesOk=staff&&!data.preview,nNotes=(data.projectNotes??[]).filter((n:any)=>n.project_id===p.id).length;
  const client=data.clients.find((c:any)=>c.id===p.client_id),status=projectStatuses.find(s=>s[0]===p.status)?.[1];
  return <div className="pj">
-  <div className="pj-head"><div><span className="pj-eyebrow">{client?.name}{board&&status?' · '+status:''}</span><h1>{p.name}</h1>{board&&p.summary&&<p>{p.summary}</p>}</div>{board&&<div className="pj-head-actions"><div className="pj-tabs" role="tablist" aria-label="Vista del proyecto"><button role="tab" aria-selected={tab==='board'} onClick={()=>setTab('board')}><LayoutGrid size={15}/>Tablero</button><button role="tab" aria-selected={tab==='client'} onClick={()=>setTab('client')}><UserRound size={15}/>Vista del cliente</button></div>{canDo(data,'projects_edit')&&<button className="secondary-btn" onClick={props.onEdit}><Pencil size={15}/>Editar proyecto</button>}</div>}</div>
-  {board&&tab==='board'?<Board {...props}/>:<Status {...props} staffView={board}/>}
+  <div className="pj-head"><div><span className="pj-eyebrow">{client?.name}{board&&status?' · '+status:''}</span><h1>{p.name}</h1>{board&&p.summary&&<p>{p.summary}</p>}</div>{board&&<div className="pj-head-actions"><div className="pj-tabs" role="tablist" aria-label="Vista del proyecto"><button role="tab" aria-selected={tab==='board'} onClick={()=>setTab('board')}><LayoutGrid size={15}/>Tablero</button>{notesOk&&<button role="tab" aria-selected={tab==='notes'} onClick={()=>setTab('notes')}><NotebookPen size={15}/>Notas{nNotes>0&&<b className="pj-tabn">{nNotes}</b>}</button>}<button role="tab" aria-selected={tab==='client'} onClick={()=>setTab('client')}><UserRound size={15}/>Vista del cliente</button></div>{canDo(data,'projects_edit')&&<button className="secondary-btn" onClick={props.onEdit}><Pencil size={15}/>Editar proyecto</button>}</div>}</div>
+  {board&&tab==='board'?<Board {...props}/>:notesOk&&tab==='notes'?<ProjectNotes {...props}/>:<Status {...props} staffView={board}/>}
  </div>;
 }
 function Board({data,project:p,busy,error,mutate}:Props){
