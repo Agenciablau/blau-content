@@ -6,10 +6,20 @@ import {drivePreviewUrl} from './drive-preview';
 import {driveThumbnailUrl} from './ReviewThumb';
 import CommentBody from './CommentBody';
 const day=()=>new Date().toISOString().slice(0,10);
+/** Retraso: tareas con fecha límite pasada sin terminar y fases cuya fecha de fin ya pasó con trabajo pendiente. */
+export function projectDelay(p:any,tasks:any[],today=day()){
+ if(p.status==='done')return null;
+ const late=tasks.filter((t:any)=>t.due&&t.due<today&&t.column_key!=='done'),phases=projectPhases(p).filter(ph=>ph.end&&ph.end<today&&tasks.some((t:any)=>t.phase_id===ph.id&&t.column_key!=='done'));
+ if(!late.length&&!phases.length)return null;
+ const ago=(d:string)=>Math.round((Date.parse(today)-Date.parse(d))/864e5);
+ return {late,phases,days:Math.max(...late.map((t:any)=>ago(t.due)),...phases.map(ph=>ago(ph.end)))};
+}
 const fd=(v:string,year=false)=>v?new Date(v.slice(0,10)+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'short',...(year?{year:'numeric'}:{})}):'Sin fecha';
 const ago=(v:string)=>new Date(v).toLocaleDateString('es-ES',{day:'numeric',month:'short',timeZone:'Europe/Madrid'});
 const colLabel=(k:string)=>taskColumns.find(c=>c[0]===k)?.[1]??k;
 const host=(u:string)=>{try{return new URL(u).hostname.replace(/^www\./,'');}catch{return u;}};
+const services:[RegExp,string][]=[[/(^|\.)figma\.com$/,'Figma'],[/^(drive|docs)\.google\.com$/,'Google Drive'],[/(^|\.)miro\.com$/,'Miro'],[/(^|\.)canva\.com$/,'Canva'],[/(^|\.)dropbox\.com$/,'Dropbox'],[/(^|\.)notion\.(so|site)$/,'Notion']];
+const service=(u:string)=>{const h=host(u);return services.find(([re])=>re.test(h))?.[1]??h;};
 export const projectTasksOf=(data:any,id:string)=>(data.projectTasks??[]).filter((t:any)=>t.project_id===id);
 /** Lo que está en manos del cliente: sus tareas abiertas de fases ya empezadas y los entregables en revisión. */
 export function clientPending(p:any,tasks:any[]){
@@ -29,14 +39,14 @@ export default function ProjectPage(props:Props){
  </div>;
 }
 function Board({data,project:p,busy,error,mutate}:Props){
- const tasks=projectTasksOf(data,p.id),phases=projectPhases(p),cur=currentPhaseIndex(phases,tasks),pct=progress(tasks),pending=clientPending(p,tasks);
+ const tasks=projectTasksOf(data,p.id),phases=projectPhases(p),cur=currentPhaseIndex(phases,tasks),pct=progress(tasks),pending=clientPending(p,tasks),delay=projectDelay(p,tasks),[lateOnly,setLateOnly]=useState(false);
  const edit=canDo(data,'tasks_edit'),[phase,setPhase]=useState('all'),[open,setOpen]=useState<any>(null),[over,setOver]=useState(''),drag=useRef<any>(null);
- const shown=tasks.filter((t:any)=>phase==='all'||t.phase_id===phase);
+ const shown=tasks.filter((t:any)=>(phase==='all'||t.phase_id===phase)&&(!lateOnly||delay?.late.includes(t)));
  const comments=(id:string)=>(data.projectComments??[]).filter((c:any)=>c.task_id===id).length;
  async function drop(col:string){if(!edit)return;const t=drag.current;drag.current=null;setOver('');if(!t||t.column_key===col)return;await mutate({action:'moveTask',id:t.id,column_key:col,updated_at:t.updated_at},`Tarea movida a «${colLabel(col)}»`);}
  const live=open?.id?tasks.find((t:any)=>t.id===open.id):null;
  return <>
-  <div className="pj-summary"><div className="pj-tile"><small>Fases</small><div className="pj-phases">{phases.map((ph,i)=><div key={ph.id} className={'pj-phase '+(i<cur?'done':i===cur?'now':'')} title={`${ph.name} · ${fd(ph.start)} – ${fd(ph.end)}`}><i/><span>{ph.name}</span></div>)}</div></div><div className="pj-tile"><small>Avance</small><strong>{pct}%</strong><div className="pj-bar"><i style={{width:pct+'%'}}/></div></div><div className="pj-tile"><small>En manos del cliente</small><strong>{pending.length} {pending.length===1?'tarea':'tareas'}</strong></div></div>
+  <div className="pj-summary"><div className="pj-tile"><small>Fases</small><div className="pj-phases">{phases.map((ph,i)=><div key={ph.id} className={'pj-phase '+(i<cur?'done':i===cur?'now':'')} title={`${ph.name} · ${fd(ph.start)} – ${fd(ph.end)}`}><i/><span>{ph.name}</span></div>)}</div></div><div className="pj-tile"><small>Avance</small><strong>{pct}%</strong><div className="pj-bar"><i style={{width:pct+'%'}}/></div></div><div className="pj-tile"><small>En manos del cliente</small><strong>{pending.length} {pending.length===1?'tarea':'tareas'}</strong></div><div className={'pj-tile pj-delay'+(delay?' late':' ok')}><small>Plazos</small>{delay?<><strong>Con retraso · {delay.days} {delay.days===1?'día':'días'}</strong>{delay.phases.map(ph=><span key={ph.id}>{ph.name} terminaba el {fd(ph.end)}</span>)}{delay.late.length>0&&<button type="button" className="text-btn" onClick={()=>setLateOnly(!lateOnly)}>{lateOnly?'Ver todas las tareas':`${delay.late.length} ${delay.late.length===1?'tarea vencida':'tareas vencidas'}`}</button>}</>:<strong>Al día</strong>}</div></div>
   <div className="pj-toolbar"><div className="pj-chips" role="group" aria-label="Filtrar por fase"><button className="pj-chip" aria-pressed={phase==='all'} onClick={()=>setPhase('all')}>Todas las fases</button>{phases.map(ph=><button key={ph.id} className="pj-chip" aria-pressed={phase===ph.id} onClick={()=>setPhase(ph.id)}>{ph.name}</button>)}</div>{edit&&<button className="primary" onClick={()=>setOpen({phase_id:phase!=='all'?phase:phases[cur]?.id,column_key:'todo',visible:true})}><Plus size={16}/>Nueva tarea</button>}</div>
   <div className="pj-board-wrap"><div className="pj-board">{taskColumns.map(([key,label])=>{const list=shown.filter((t:any)=>t.column_key===key);return <section key={key} className={'pj-col '+key+(over===key?' drop':'')} aria-label={label} onDragOver={e=>{e.preventDefault();setOver(key);}} onDragLeave={()=>setOver(o=>o===key?'':o)} onDrop={e=>{e.preventDefault();drop(key);}}>
    <h3>{label}<b>{list.length}</b></h3>
@@ -77,7 +87,7 @@ function TaskDrawer({data,project:p,task,busy,error,mutate,onClose}:{data:any;pr
     <label className="pe-opt"><span><b>Entregable para aprobar</b><small>En «En revisión» el cliente lo ve en el visor y puede aprobarlo o pedir cambios.</small></span><input type="checkbox" role="switch" className="pe-switch" checked={d.deliverable} onChange={e=>{set('deliverable',e.target.checked);if(e.target.checked)set('visible',true);}}/></label>
    </div>
    {d.deliverable&&<div className="pj-sec"><h4>Vistas del entregable</h4><p className="pe-note">Cada vista corresponde a un enlace, en el mismo orden.</p><div className="pe-views">{deliverableViews.map(v=><button type="button" key={v} className="pe-vchip" aria-pressed={d.views.includes(v)} onClick={()=>set('views',d.views.includes(v)?d.views.filter((x:string)=>x!==v):[...d.views,v])}>{v}</button>)}</div></div>}
-   <label>Enlaces{d.deliverable?' del entregable':''}<textarea rows={3} value={d.links} placeholder={'Un enlace por línea. Los archivos de Drive se ven dentro de la app.\nhttps://drive.google.com/file/d/…'} onChange={e=>set('links',e.target.value)}/></label>
+   <label>Enlaces{d.deliverable?' del entregable':''}<small className="pe-note">{d.visible?'El cliente los verá en «Enlaces y materiales» de su panel.':'Solo los ve el equipo mientras la tarea no sea visible para el cliente.'}</small><textarea rows={3} value={d.links} placeholder={'Un enlace por línea: Figma, Drive, un boceto…\nhttps://www.figma.com/design/…'} onChange={e=>set('links',e.target.value)}/></label>
    <div className="pj-sec"><h4>Checklist {ck.length>0&&<small>{ck.filter(c=>c.done).length}/{ck.length}</small>}</h4><div className="pj-check">{ck.map((c,i)=><div key={i}><label><input type="checkbox" checked={c.done} onChange={e=>set('checklist',ck.map((x,j)=>j===i?{...x,done:e.target.checked}:x))}/><span>{c.text}</span></label><button type="button" className="icon-btn" aria-label={'Quitar '+c.text} onClick={()=>set('checklist',ck.filter((_,j)=>j!==i))}><X size={14}/></button></div>)}</div>{ck.length<50&&<div className="pe-addp"><input aria-label="Nuevo punto del checklist" value={item} maxLength={200} placeholder="Añadir un punto" onChange={e=>setItem(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(item.trim()){set('checklist',[...ck,{text:item.trim(),done:false}]);setItem('');}}}}/><button type="button" className="secondary-btn" disabled={!item.trim()} onClick={()=>{set('checklist',[...ck,{text:item.trim(),done:false}]);setItem('');}}><Plus size={15}/>Añadir</button></div>}</div>
    </fieldset>{error&&<p className="pe-error" role="alert">{error}</p>}
    {!ro&&<div className="pj-dactions">{!isNew&&(data.role==='owner'||data.role==='team')&&<button type="button" className="danger-text-btn" disabled={busy} onClick={remove}><Trash2 size={15}/>Eliminar</button>}<button className="primary" disabled={busy||!d.title.trim()}><Check size={16}/>{busy?'Guardando…':isNew?'Crear tarea':'Guardar tarea'}</button></div>}
@@ -98,6 +108,7 @@ function Status({data,project:p,busy,error,mutate,staffView}:Props&{staffView:bo
  const isClient=data.role==='client',canAct=isClient&&!staffView,pct=progress(tasks),pending=clientPending(p,tasks),domain=fields.find(f=>f.type==='Enlace'&&/dominio|web/i.test(f.name))?.value??'';
  const deliverables=tasks.filter((t:any)=>t.deliverable),pick=deliverables.find((t:any)=>t.column_key==='review')??[...deliverables].reverse().find((t:any)=>t.phase_id===now?.id&&t.links)??[...deliverables].reverse().find((t:any)=>t.links)??deliverables[0];
  const [sel,setSel]=useState<string|undefined>(),d=deliverables.find((t:any)=>t.id===sel)??pick;
+ const linked=tasks.filter((t:any)=>materialLinks(t.links??'').length).sort((a:any,b:any)=>phases.findIndex(x=>x.id===b.phase_id)-phases.findIndex(x=>x.id===a.phase_id));
  const [changes,setChanges]=useState(''),[note,setNote]=useState(''),[asking,setAsking]=useState(false);
  const ph=(t:any)=>phases.find(x=>x.id===t.phase_id),stLabel=(t:any)=>t.column_key==='done'?['ok','Aprobado']:t.column_key==='review'?['rev','Para revisar']:t.column_key==='doing'?['wip','En curso']:['next','Próximamente'];
  const comments=(data.projectComments??[]).filter((c:any)=>c.task_id===d?.id&&!c.internal);
@@ -126,6 +137,7 @@ function Status({data,project:p,busy,error,mutate,staffView}:Props&{staffView:bo
    </>:<div className="pj-wip"><ImageOff size={22}/><span>Aquí verás los diseños cuando estén listos.</span></div>}</section>
    <div className="pj-side">
     <section className={'pj-box pj-card2'+(pending.length?' todo':'')}><h3>Qué necesitamos de ti{pending.length>0&&<span className="pj-count">{pending.length}</span>}</h3>{pending.length?pending.map((t:any)=><div className="pj-item" key={t.id}><b>{t.deliverable&&t.column_key==='review'?`Revisar «${t.title}»`:t.title}</b>{t.description&&<p>{t.description}</p>}{t.due&&<p>Antes del {fd(t.due)}</p>}{t.deliverable&&t.column_key==='review'?<button className="secondary-btn" onClick={()=>setSel(t.id)}>Ver el diseño</button>:t.column_key==='review'?<span className="pj-st ok">Enviado, lo estamos revisando</span>:canAct||data.preview?<button className="secondary-btn" disabled={busy} onClick={()=>sent(t)}><Send size={14}/>Marcar como enviado</button>:<span className="pe-note">Pendiente del cliente</span>}</div>):<p className="pe-note">Ahora mismo no tienes nada pendiente. Te avisaremos cuando haya algo que revisar.</p>}</section>
+    {linked.length>0&&<section className="pj-box pj-card2"><h3>Enlaces y materiales</h3><ul className="pj-links">{linked.map((t:any)=><li key={t.id}><span className="pj-lt"><b>{t.title}</b><small>{ph(t)?.name}</small></span><span className="pj-lchips">{materialLinks(t.links).map((l,i)=><a key={i} className="pj-lchip" href={l} target="_blank" rel="noopener noreferrer">{service(l)}<ExternalLink size={12}/></a>)}</span></li>)}</ul></section>}
     <section className="pj-box pj-card2"><h3>Fases del proyecto</h3><ul className="pj-plist">{phases.map((x,i)=><li key={x.id}><span className={'ck'+(i<cur||p.status==='done'?' y':i===cur?' h':'')}>{(i<cur||p.status==='done')&&<Check size={11}/>}</span><span>{x.name}{x.milestone&&<small>{x.milestone}</small>}</span><small>{fd(x.end)}</small></li>)}</ul></section>
     {opts.prod&&fields.length>0&&<section className="pj-box pj-card2"><h3>Datos del proyecto</h3><dl className="pj-fields">{fields.map((f,i)=><div key={i}><dt>{f.name}</dt><dd>{f.type==='Enlace'?<a href={f.value} target="_blank" rel="noopener noreferrer">{host(f.value)}<ExternalLink size={12}/></a>:f.type==='Fecha'?fd(f.value,true):f.value}</dd></div>)}</dl></section>}
    </div>
