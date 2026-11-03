@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 const sql=new DatabaseSync(':memory:');
-for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql','0008_key_dates_internal_notes.sql','0009_reel_buffer_music.sql','0010_buffer_linkedin.sql','0011_projects.sql','0012_comment_edits.sql','0013_member_clients.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
+for(const migration of ['0000_next_whirlwind.sql','0001_lively_slapstick.sql','0002_client_profiles.sql','0003_buffer_integration.sql','0004_comment_inbox.sql','0005_post_client_changes.sql','0006_email_digests.sql','0007_member_names.sql','0008_key_dates_internal_notes.sql','0009_reel_buffer_music.sql','0010_buffer_linkedin.sql','0011_projects.sql','0012_comment_edits.sql','0013_member_clients.sql','0014_collaborator_permissions.sql'])sql.exec(readFileSync('migrations/'+migration,'utf8'));
 class Statement{
  constructor(q,args=[]){this.q=q;this.args=args;}
  bind(...args){return new Statement(this.q,args);}
@@ -15,7 +15,8 @@ const db={prepare(q){return new Statement(q)},async batch(statements){sql.exec('
 let identity={userId:'owner',email:'owner@example.com',displayName:'Owner'};
 const env={DB:db,ADMIN_EMAIL:'owner@example.com'};
 const transpile=(src)=>ts.transpileModule(src,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
-const moduleUrl=(src)=>'data:text/javascript;base64,'+Buffer.from(transpile(src)).toString('base64');
+const moduleUrl=(src)=>'data:text/javascript;base64,'+Buffer.from(transpile(src.replace(/import \{([^}]*)\} from '\.\.\/shared\/collaborator-access';/g,'const {$1}=globalThis.__blauAccess;'))).toString('base64');
+globalThis.__blauAccess=await import('data:text/javascript;base64,'+Buffer.from(transpile(readFileSync('shared/collaborator-access.ts','utf8'))).toString('base64'));
 const material=await import(moduleUrl(readFileSync('shared/material-links.ts','utf8')));
 globalThis.__blauMaterial=material;
 const profiles=await import(moduleUrl(readFileSync('shared/client-profile.ts','utf8')));
@@ -294,7 +295,7 @@ await post({action:'member',email:'named@example.com',role:'client',client_id:b.
 identity={userId:'named',email:'named@example.com',displayName:'named@example.com'};assert.equal((await get()).comments.find(c=>c.body==='Respuesta del administrador').author,'Blau Admin');identity={userId:'owner',email:'owner@example.com',displayName:'owner@example.com'};
 const namedBackup=await (await api.GET(new Request('https://test.local/api/workspace?export=1'))).json();assert.equal(namedBackup.owner_name,'Blau Admin');assert.equal(namedBackup.members.find(m=>m.email==='named@example.com').name,'Ana María');
 console.log('Passed: member and administrator names, owner-only naming, names shown in comments for every role, stored emails unchanged and names kept in backups.');
-const before=welcomes.length;const welcomeResult=await post({action:'member',email:'welcome@example.com',role:'collaborator',client_id:a.id,name:'Luis Gil'});assert.equal(welcomeResult.welcome,'sent');assert.equal(welcomes.length,before+1);assert.deepEqual(welcomes.at(-1),{name:'Luis Gil',email:'welcome@example.com',role:'collaborator',brand:a.name});
+const before=welcomes.length;const welcomeResult=await post({action:'member',email:'welcome@example.com',role:'collaborator',client_id:a.id,name:'Luis Gil'});assert.equal(welcomeResult.welcome,'sent');assert.equal(welcomes.length,before+1);assert.deepEqual(welcomes.at(-1),{name:'Luis Gil',email:'welcome@example.com',role:'collaborator',permissions:['posts_edit','posts_send'],brand:a.name});
 assert.equal((await post({action:'member',email:'welcome@example.com',role:'collaborator',client_id:a.id,name:'Luis G.'})).welcome,undefined);assert.equal(welcomes.length,before+1);
 assert.equal((await post({action:'welcome',email:'welcome@example.com'})).welcome,'sent');assert.equal(welcomes.at(-1).name,'Luis G.');await post({action:'welcome',email:'nobody@example.com'},404);
 identity={userId:'named',email:'named@example.com',displayName:'named@example.com'};await post({action:'welcome',email:'welcome@example.com'},403);identity={userId:'owner',email:'owner@example.com',displayName:'owner@example.com'};
@@ -419,3 +420,51 @@ await post({action:'removeMember',email:'multi@marcas.es'});await post({action:'
 for(const t of ['member_clients','project_reviews','project_comments','project_tasks','projects','reviews','comments','buffer_jobs','posts','members','key_dates','buffer_bindings','clients'])sql.exec(`DELETE FROM ${t}`);await post({action:'import',backup:{...mb,member_clients:[...mb.member_clients,{email:'nadie@x.es',client_id:mx.id}]}});
 mm=(await get()).members.find(m=>m.email==='multi@marcas.es');assert.deepEqual(mm.client_ids,[mz.id,mx.id]);assert.equal(sql.prepare('SELECT COUNT(*) n FROM member_clients').get().n,1,'Rows for unknown collaborators are skipped');
 console.log('Passed: collaborators with several brands see and edit only those brands, each brand keeps its own sections, backups keep the extra brands, and deleting a brand or the access cleans them up.');
+// Collaborator profiles: each permission is enforced in the Worker.
+await post({action:'client',name:'Marca P',color:'#444444'});await post({action:'client',name:'Marca Q',color:'#555555'});const mp=sqlClients().find(c=>c.name==='Marca P'),mq=sqlClients().find(c=>c.name==='Marca Q');
+const L=(fn)=>as('lector@p.es',fn),P=(fn)=>as('productor@p.es',fn),K=(fn)=>as('coord@p.es',fn),R=(fn)=>as('redactor@p.es',fn);
+await post({action:'member',email:'lector@p.es',role:'collaborator',client_id:mp.id,permissions:['bogus']},400);
+await post({action:'member',email:'lector@p.es',role:'collaborator',client_id:mp.id,permissions:[]});
+await post({action:'member',email:'redactor@p.es',role:'collaborator',client_id:mp.id});
+await post({action:'member',email:'productor@p.es',role:'collaborator',client_id:mp.id,permissions:['posts_edit','posts_send','tasks_board','tasks_edit','tasks_review']});
+await post({action:'member',email:'coord@p.es',role:'collaborator',client_ids:[mp.id],permissions:['posts_send','tasks_edit','internal_notes','key_dates','projects_edit']});
+assert.deepEqual(JSON.parse(sql.prepare("SELECT permissions FROM members WHERE email='coord@p.es'").get().permissions),['posts_edit','posts_send','tasks_board','tasks_edit','internal_notes','key_dates','projects_edit'],'Dependent permissions are added');
+assert.deepEqual((await L(get)()).permissions,[]);assert.deepEqual((await R(get)()).permissions,['posts_edit','posts_send'],'No stored permissions = Redactor');
+await post({action:'member',email:'lector@p.es',role:'collaborator',client_id:mp.id,name:'Lector'});assert.deepEqual((await L(get)()).permissions,[],'Editing an access without permissions keeps them');
+assert.ok((await get()).members.some(m=>m.email==='lector@p.es'&&m.permissions==='[]'));
+// Posts: Lector only comments; sending to review needs posts_send.
+const pp={action:'post',client_id:mp.id,title:'P1',copy:'',channel:'Instagram',format:'Imagen',date:'2030-03-01T10:00',status:'Borrador',asset:''};
+await L(post)(pp,403);await R(post)(pp);let p1=(await get()).posts.find(x=>x.title==='P1');await L(post)({action:'comment',id:p1.id,body:'Lo veo bien'});
+await post({action:'member',email:'redactor@p.es',role:'collaborator',client_id:mp.id,permissions:['posts_edit']});
+await R(post)({...pp,id:p1.id,updated_at:p1.updated_at,status:'En revisión'},403);await R(post)({...pp,id:p1.id,updated_at:p1.updated_at,copy:'Nuevo copy'});p1=(await get()).posts.find(x=>x.title==='P1');
+await P(post)({...pp,id:p1.id,updated_at:p1.updated_at,copy:'Nuevo copy',status:'En revisión'});assert.equal((await get()).posts.find(x=>x.title==='P1').status,'En revisión');
+// Internal notes and key dates only for the coordinator, and only on their brands.
+await post({action:'comment',id:p1.id,body:'Nota del equipo',internal:true});
+assert.ok((await K(get)()).comments.some(c=>c.internal&&c.body==='Nota del equipo'));assert.ok(!(await P(get)()).comments.some(c=>c.internal));
+await P(post)({action:'comment',id:p1.id,body:'x',internal:true},403);await K(post)({action:'comment',id:p1.id,body:'Nota del coordinador',internal:true});
+const kn=(await get()).comments.find(c=>c.body==='Nota del coordinador');await K(post)({action:'editComment',id:kn.id,body:'Nota corregida'});
+await P(post)({action:'keyDate',title:'Rebajas',date:'2030-01-07',client_id:mp.id},403);await K(post)({action:'keyDate',title:'Global',date:'2030-01-07'},403);await K(post)({action:'keyDate',title:'Otra',date:'2030-01-07',client_id:mq.id},403);
+await K(post)({action:'keyDate',title:'Rebajas P',date:'2030-01-07',client_id:mp.id});const kdp=(await get()).keyDates.find(k=>k.title==='Rebajas P');await K(post)({action:'keyDate',id:kdp.id,title:'Rebajas P2',date:'2030-01-08',client_id:mp.id});
+await post({action:'keyDate',title:'Global equipo',date:'2030-01-09'});const gk=(await get()).keyDates.find(k=>k.title==='Global equipo');await K(post)({action:'deleteKeyDate',id:gk.id},403);await K(post)({action:'deleteKeyDate',id:kdp.id});
+// Projects: board and tasks for Productor, project editing for Coordinador, nobody deletes.
+await K(post)({action:'project',client_id:mq.id,name:'Ajeno',phases},403);await P(post)({action:'project',client_id:mp.id,name:'Web P',phases},403);
+await K(post)({action:'project',client_id:mp.id,name:'Web P',phases,fields:[{name:'Presupuesto',type:'Número',value:'900',visible:false}],tasks:[{title:'Oculta',phase_id:'f1',column_key:'todo',visible:false},{title:'Visible',phase_id:'f1',column_key:'todo',visible:true}]});
+let wp=(await get()).projects.find(x=>x.name==='Web P');
+assert.deepEqual((await L(get)()).projectTasks.filter(t=>t.project_id===wp.id).map(t=>t.title),['Visible']);assert.equal(JSON.parse((await L(get)()).projects.find(x=>x.id===wp.id).fields).length,0);
+assert.deepEqual((await P(get)()).projectTasks.filter(t=>t.project_id===wp.id).map(t=>t.title).sort(),['Oculta','Visible']);assert.equal(JSON.parse((await P(get)()).projects.find(x=>x.id===wp.id).fields).length,0,'Hidden fields only for project editors');
+assert.equal(JSON.parse((await K(get)()).projects.find(x=>x.id===wp.id).fields).length,1);
+await K(post)({action:'project',id:wp.id,updated_at:wp.updated_at,name:'Web P v2',phases,fields:JSON.parse(wp.fields)});assert.ok((await get()).projects.some(x=>x.name==='Web P v2'));
+await K(post)({action:'deleteProject',id:wp.id,confirmName:'Web P v2'},403);
+const hid=(await get()).projectTasks.find(t=>t.title==='Oculta');
+await L(post)({action:'task',project_id:wp.id,title:'Nueva',phase_id:'f1',column_key:'todo'},403);await L(post)({action:'moveTask',id:hid.id,column_key:'doing',updated_at:hid.updated_at},404);
+await P(post)({action:'moveTask',id:hid.id,column_key:'doing',updated_at:hid.updated_at});let ht=(await get()).projectTasks.find(t=>t.id===hid.id);assert.equal(ht.column_key,'doing');
+await post({action:'member',email:'productor@p.es',role:'collaborator',client_id:mp.id,permissions:['tasks_board','tasks_edit']});
+await P(post)({action:'moveTask',id:hid.id,column_key:'review',updated_at:ht.updated_at},403);await P(post)({action:'task',id:hid.id,updated_at:ht.updated_at,title:'Oculta',phase_id:'f1',column_key:'review'},403);
+await P(post)({action:'task',project_id:wp.id,title:'Creada por productor',phase_id:'f1',column_key:'todo'});await P(post)({action:'deleteTask',id:hid.id},403);
+await P(post)({action:'taskComment',id:hid.id,body:'x',internal:true},403);await P(post)({action:'taskComment',id:hid.id,body:'Comentario en tarea oculta'});
+await P(post)({action:'taskReview',id:hid.id,decision:'Aprobado',updated_at:ht.updated_at},403);
+// Backups keep the permissions.
+const pb=await (await api.GET(new Request('https://test.local/api/workspace?export=1'))).json();assert.equal(pb.members.find(m=>m.email==='coord@p.es').permissions,JSON.stringify(['posts_edit','posts_send','tasks_board','tasks_edit','internal_notes','key_dates','projects_edit']));
+for(const t of ['member_clients','project_reviews','project_comments','project_tasks','projects','reviews','comments','buffer_jobs','posts','members','key_dates','buffer_bindings','clients'])sql.exec(`DELETE FROM ${t}`);await post({action:'import',backup:pb});
+assert.deepEqual((await K(get)()).permissions,['posts_edit','posts_send','tasks_board','tasks_edit','internal_notes','key_dates','projects_edit']);assert.deepEqual((await L(get)()).permissions,[]);
+console.log('Passed: collaborator profiles: Lector only views and comments, sending to review needs its own permission, internal notes and key dates only with permission and on their brands, board and tasks for Productor, project editing for Coordinador with hidden fields, nobody deletes, and permissions kept in backups.');

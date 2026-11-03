@@ -6,6 +6,7 @@ import {normalizeClientProfile,readClientProfile} from '../shared/client-profile
 import {lockedBufferStates,bufferState,sendsToBuffer} from '../shared/buffer-scheduling';
 import {sendWelcome} from './email-welcome';
 import {loadProjects,projectAction,projectActions} from './projects';
+import {readPermissions,normalizePermissions} from '../shared/collaborator-access';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
 const channels=['Instagram','LinkedIn','Email','Blog / web','TikTok','Facebook'];
@@ -17,7 +18,7 @@ async function context(){
  const db=env.DB!; const w:any=await db.prepare('SELECT * FROM workspace WHERE id=1').first();
  const member:any=w?await db.prepare('SELECT * FROM members WHERE email=?').bind(user.email.toLowerCase()).first():null;
  const more=member?.role==='collaborator'?(await db.prepare('SELECT client_id FROM member_clients WHERE email=? ORDER BY rowid').bind(member.email).all<any>()).results.map((r:any)=>r.client_id):[];
- return {db,user,w,role:(w?.owner===user.userId||w?.email===user.email.toLowerCase())?'owner':(['team','client','collaborator'].includes(member?.role)?member.role:'none'),clientId:member?.client_id,clientIds:(member?.client_id?[member.client_id,...more.filter((x:string)=>x!==member.client_id)]:[]) as string[]};
+ return {db,user,w,role:(w?.owner===user.userId||w?.email===user.email.toLowerCase())?'owner':(['team','client','collaborator'].includes(member?.role)?member.role:'none'),clientId:member?.client_id,clientIds:(member?.client_id?[member.client_id,...more.filter((x:string)=>x!==member.client_id)]:[]) as string[],perms:member?.role==='collaborator'?readPermissions(member.permissions) as string[]:[]};
 }
 const marks=(ids:string[])=>`IN (${ids.map(()=>'?').join(',')||'NULL'})`;
 /** Marcas del usuario limitado que existen, y las que tienen activas redes sociales y proyectos. */
@@ -34,9 +35,9 @@ async function GET(req?:Request){
  if(preview){
   if(c.role!=='owner')return fail('Solo el administrador puede abrir una vista previa.',403);
   if(!await c.db.prepare('SELECT id FROM clients WHERE id=?').bind(preview).first())return fail('Cliente no encontrado.',404);
-  c.role='client';c.clientId=preview;c.clientIds=[preview];
+  c.role='client';c.clientId=preview;c.clientIds=[preview];c.perms=[];
  }
- const client=c.role==='client',scoped=client||c.role==='collaborator',own=scoped?await scopeOf(c.db,c.clientIds):{rows:[],social:[],projects:[]};
+ const client=c.role==='client',notes=c.role==='collaborator'&&c.perms.includes('internal_notes'),scoped=client||c.role==='collaborator',own=scoped?await scopeOf(c.db,c.clientIds):{rows:[],social:[],projects:[]};
  if(scoped&&!own.rows.length)return fail('Tu acceso no tiene una marca asignada válida.',403);
  if(req&&new URL(req.url).searchParams.get('export')==='1'){
   if(c.role!=='owner')return fail('Solo el administrador puede exportar.',403);
@@ -49,18 +50,18 @@ async function GET(req?:Request){
  const soc=own.social,inSoc=marks(soc),bs=scoped?soc:[];
  const p=await c.db.prepare(client?`SELECT * FROM posts WHERE client_id ${inSoc} AND status NOT IN ('Idea','Borrador') ORDER BY date`:scoped?`SELECT * FROM posts WHERE client_id ${inSoc} ORDER BY date`:"SELECT * FROM posts ORDER BY date").bind(...bs).all();
  const scope=client?` WHERE post_id IN (SELECT id FROM posts WHERE client_id ${inSoc} AND status NOT IN ('Idea','Borrador'))`:scoped?` WHERE post_id IN (SELECT id FROM posts WHERE client_id ${inSoc})`:'';
- const commentScope=scope+(scoped?' AND internal=0 AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=comments.post_id)':'');
+ const commentScope=scope+(scoped?(notes?'':' AND internal=0')+' AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=comments.post_id)':'');
  const reviewScope=scope+(scoped?' AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=reviews.post_id)':'');
  const co=await c.db.prepare('SELECT * FROM comments'+commentScope+' ORDER BY created_at, rowid').bind(...bs).all();
  const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+reviewScope+' ORDER BY created_at DESC').bind(...bs).all();
- const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id,name FROM members WHERE role IN ('client','collaborator') ORDER BY email").all():{results:[]};
+ const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id,name,permissions FROM members WHERE role IN ('client','collaborator') ORDER BY email").all():{results:[]};
  const extraMarks=c.role==='owner'||c.role==='team'?(await c.db.prepare('SELECT email,client_id FROM member_clients ORDER BY rowid').all<any>()).results:[];
  const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?` WHERE client_id ${inSoc} AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))`:scoped?` WHERE client_id ${inSoc}`:'')).bind(...bs).all();
  const keyDates=await c.db.prepare('SELECT id,client_id,date,title,yearly FROM key_dates'+(scoped?` WHERE (${soc.length?'client_id IS NULL OR ':''}client_id ${inSoc})`:'')+' ORDER BY date').bind(...bs).all();
- const projectData=await loadProjects(c.db,c.role,scoped?own.projects:null);
+ const projectData=await loadProjects(c.db,c.role,scoped?own.projects:null,c.perms);
  const names=new Map<string,string>((await c.db.prepare("SELECT email,name FROM members WHERE name<>''").all<any>()).results.map((r:any)=>[r.email,r.name]));if(c.w.owner_name)names.set(c.w.email,c.w.owner_name);
  const named=(v:string)=>names.get(String(v??'').toLowerCase())||v;
- return Response.json({needsSetup:false,preview:!!preview,role:c.role,user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),members:m.results.map((x:any)=>x.role==='collaborator'?{...x,client_ids:[x.client_id,...extraMarks.filter((e:any)=>e.email===x.email&&e.client_id!==x.client_id).map((e:any)=>e.client_id)]}:x),reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)}))},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({needsSetup:false,preview:!!preview,role:c.role,...(c.role==='collaborator'?{permissions:c.perms}:{}),user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),members:m.results.map((x:any)=>x.role==='collaborator'?{...x,client_ids:[x.client_id,...extraMarks.filter((e:any)=>e.email===x.email&&e.client_id!==x.client_id).map((e:any)=>e.client_id)]}:x),reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)}))},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
 async function POST(req:Request){
@@ -69,7 +70,7 @@ async function POST(req:Request){
  if(preview){
   if(c.role!=='owner')return fail('Solo el administrador puede utilizar la vista de cliente.',403);
   if(!await c.db.prepare('SELECT id FROM clients WHERE id=?').bind(preview).first())return fail('Cliente no encontrado.',404);
-  c.role='client';c.clientId=preview;c.clientIds=[preview];
+  c.role='client';c.clientId=preview;c.clientIds=[preview];c.perms=[];
  }
  const origin=req.headers.get('origin'); if(origin&&origin!==new URL(req.url).origin)return fail('Origen no permitido.',403);
  let b:any;try{b=await req.json();}catch{return fail('Datos no válidos.');}
@@ -85,15 +86,15 @@ async function POST(req:Request){
   return Response.json({ok:true});
  }
  if(!c.w||c.role==='none')return fail('No tienes permiso para esta acción.',403);
- const staff=c.role==='owner'||c.role==='team',collaborator=c.role==='collaborator';
+ const staff=c.role==='owner'||c.role==='team',collaborator=c.role==='collaborator',can=(k:string)=>staff||collaborator&&c.perms.includes(k);
  const own=staff?null:await scopeOf(c.db,c.clientIds),soc=own?.social??[];
  if(collaborator&&!own?.rows.length)return fail('Tu acceso no tiene una marca asignada válida.',403);
- if(projectActions.includes(b.action)){const r=await projectAction({db:c.db,role:c.role,clientIds:own?.projects??[],user:c.user,preview:!!preview},b);return r??Response.json({ok:true});}
+ if(projectActions.includes(b.action)){const r=await projectAction({db:c.db,role:c.role,clientIds:own?.projects??[],perms:c.perms,user:c.user,preview:!!preview},b);return r??Response.json({ok:true});}
  if(['post','review','comment','delete','editComment'].includes(b.action)&&own&&!soc.length)return fail('Tu acceso no incluye redes sociales.',403);
  if(b.action==='editComment'){
   const body=str(b.body);if(!body)return fail('Escribe un comentario.');
   const cm=await c.db.prepare('SELECT comments.id,comments.author,comments.internal,comments.created_at,posts.client_id,posts.client_changed_at FROM comments JOIN posts ON posts.id=comments.post_id WHERE comments.id=?').bind(str(b.id,100)).first<any>();
-  if(!cm||!staff&&(!soc.includes(cm.client_id)||cm.internal||!(cm.created_at>(cm.client_changed_at??''))))return fail('Comentario no encontrado.',404);
+  if(!cm||!staff&&(!soc.includes(cm.client_id)||cm.internal&&!can('internal_notes')||!(cm.created_at>(cm.client_changed_at??''))))return fail('Comentario no encontrado.',404);
   if(String(cm.author).toLowerCase()!==c.user.email.toLowerCase())return fail('Solo puedes editar tus propios comentarios.',403);
   await c.db.prepare('UPDATE comments SET body=?,edited_at=? WHERE id=?').bind(body,new Date().toISOString(),cm.id).run();
   return Response.json({ok:true});
@@ -142,27 +143,30 @@ async function POST(req:Request){
   const ids=role==='collaborator'&&Array.isArray(b.client_ids)?[...new Set<string>(b.client_ids.map((x:any)=>str(x,100)).filter(Boolean))]:[str(b.client_id,100)].filter(Boolean),cid=ids[0]??'';
   if(['client','collaborator'].includes(role)&&(!ids.length||ids.length>100||(await c.db.prepare(`SELECT COUNT(*) AS n FROM clients WHERE id ${marks(ids)}`).bind(...ids).first<any>())?.n!==ids.length))return fail(role==='collaborator'?'Selecciona al menos un cliente.':'Selecciona un cliente.');
   let drive:string|undefined;if(['client','collaborator'].includes(role)&&Object.hasOwn(b,'drive_folder_url')){try{drive=normalizeClientProfile({drive_folder_url:b.drive_folder_url}).drive_folder_url;}catch(e){return fail(e instanceof Error?e.message:'Enlace de Drive no válido.');}}
-  const operations=[c.db.prepare('INSERT INTO members(email,role,client_id,name) VALUES(?,?,?,?) ON CONFLICT(email) DO UPDATE SET role=excluded.role,client_id=excluded.client_id,name=excluded.name').bind(email,role,['client','collaborator'].includes(role)?cid:null,str(b.name,80)),c.db.prepare('DELETE FROM member_clients WHERE email=?').bind(email),...(role==='collaborator'?ids.slice(1).map(x=>c.db.prepare('INSERT INTO member_clients(email,client_id) VALUES(?,?)').bind(email,x)):[])];
+  let perms='';if(role==='collaborator'&&b.permissions!==undefined){try{perms=normalizePermissions(b.permissions);}catch(e){return fail(e instanceof Error?e.message:'Permisos no válidos.');}}else if(role==='collaborator')perms=(await c.db.prepare("SELECT permissions FROM members WHERE email=? AND role='collaborator'").bind(email).first<any>())?.permissions??'';
+  const operations=[c.db.prepare('INSERT INTO members(email,role,client_id,name,permissions) VALUES(?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET role=excluded.role,client_id=excluded.client_id,name=excluded.name,permissions=excluded.permissions').bind(email,role,['client','collaborator'].includes(role)?cid:null,str(b.name,80),perms),c.db.prepare('DELETE FROM member_clients WHERE email=?').bind(email),...(role==='collaborator'?ids.slice(1).map(x=>c.db.prepare('INSERT INTO member_clients(email,client_id) VALUES(?,?)').bind(email,x)):[])];
   if(drive!==undefined)operations.push(c.db.prepare("UPDATE clients SET profile=json_set(COALESCE(profile,'{}'),'$.drive_folder_url',?) WHERE id=?").bind(drive,cid));
   const isNew=!await c.db.prepare('SELECT 1 FROM members WHERE email=?').bind(email).first();
   await c.db.batch(operations);
-  if(isNew)extra.welcome=await sendWelcome(env,{name:str(b.name,80),email,role,brand:role==='team'?'':(await c.db.prepare(`SELECT group_concat(name,', ') AS name FROM clients WHERE id ${marks(ids)}`).bind(...ids).first<any>())?.name??''});
+  if(isNew)extra.welcome=await sendWelcome(env,{name:str(b.name,80),email,role,...(role==='collaborator'?{permissions:readPermissions(perms)}:{}),brand:role==='team'?'':(await c.db.prepare(`SELECT group_concat(name,', ') AS name FROM clients WHERE id ${marks(ids)}`).bind(...ids).first<any>())?.name??''});
  }else if(b.action==='welcome'){
   if(c.role!=='owner')return fail('Sin permiso.',403);
-  const m=await c.db.prepare("SELECT m.email,m.role,m.name,(SELECT group_concat(cl.name,', ') FROM clients cl WHERE cl.id=m.client_id OR cl.id IN (SELECT client_id FROM member_clients WHERE email=m.email)) AS brand FROM members m WHERE m.email=?").bind(str(b.email,254).toLowerCase()).first<any>();if(!m)return fail('Acceso no encontrado.',404);
-  extra.welcome=await sendWelcome(env,{name:m.name,email:m.email,role:m.role,brand:m.role==='team'?'':m.brand??''});
+  const m=await c.db.prepare("SELECT m.email,m.role,m.name,m.permissions,(SELECT group_concat(cl.name,', ') FROM clients cl WHERE cl.id=m.client_id OR cl.id IN (SELECT client_id FROM member_clients WHERE email=m.email)) AS brand FROM members m WHERE m.email=?").bind(str(b.email,254).toLowerCase()).first<any>();if(!m)return fail('Acceso no encontrado.',404);
+  extra.welcome=await sendWelcome(env,{name:m.name,email:m.email,role:m.role,...(m.role==='collaborator'?{permissions:readPermissions(m.permissions)}:{}),brand:m.role==='team'?'':m.brand??''});
  }else if(b.action==='ownerName'){
   if(c.role!=='owner')return fail('Sin permiso.',403);
   await c.db.prepare('UPDATE workspace SET owner_name=? WHERE id=1').bind(str(b.name,80)).run();
  }else if(b.action==='keyDate'){
-  if(!staff)return fail('Solo el equipo puede gestionar las fechas clave.',403);
+  if(!can('key_dates'))return fail('Solo el equipo puede gestionar las fechas clave.',403);
   const title=str(b.title,80),date=str(b.date,10),cid=str(b.client_id,100)||null;
+  if(collaborator&&(!cid||!soc.includes(cid)||b.id&&!soc.includes((await c.db.prepare('SELECT client_id FROM key_dates WHERE id=?').bind(str(b.id,100)).first<any>())?.client_id)))return fail('Solo puedes gestionar fechas clave de tus marcas.',403);
   if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(date)||new Date(date+'T00:00Z').toISOString().slice(0,10)!==date)return fail('Indica un nombre y una fecha válida.');
   if(cid&&!await c.db.prepare('SELECT id FROM clients WHERE id=?').bind(cid).first())return fail('Cliente no encontrado.',404);
   if(b.id){const r=await c.db.prepare('UPDATE key_dates SET title=?,date=?,client_id=?,yearly=? WHERE id=?').bind(title,date,cid,b.yearly?1:0,str(b.id,100)).run();if(!r.meta.changes)return fail('Fecha no encontrada.',404);}
   else await c.db.prepare('INSERT INTO key_dates(id,client_id,date,title,yearly,created_at) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),cid,date,title,b.yearly?1:0,new Date().toISOString()).run();
  }else if(b.action==='deleteKeyDate'){
-  if(!staff)return fail('Solo el equipo puede gestionar las fechas clave.',403);
+  if(!can('key_dates'))return fail('Solo el equipo puede gestionar las fechas clave.',403);
+  if(collaborator&&!soc.includes((await c.db.prepare('SELECT client_id FROM key_dates WHERE id=?').bind(str(b.id,100)).first<any>())?.client_id))return fail('Solo puedes gestionar fechas clave de tus marcas.',403);
   const r=await c.db.prepare('DELETE FROM key_dates WHERE id=?').bind(str(b.id,100)).run();if(!r.meta.changes)return fail('Fecha no encontrada.',404);
  }else if(b.action==='removeMember'){
   if(c.role!=='owner')return fail('Sin permiso.',403);
@@ -175,7 +179,7 @@ async function POST(req:Request){
   if(existing&&['post','review'].includes(b.action)&&existing.updated_at!==b.updated_at)return fail('La publicación ha cambiado. Actualiza antes de continuar.',409);
   if(existing&&c.role==='client'&&(!soc.includes(existing.client_id)||['Idea','Borrador'].includes(existing.status)))return fail('Sin permiso.',403);
   if(b.action==='comment'){
-   const body=str(b.body),internal=b.internal===true;if(!body)return fail('Escribe un comentario.');if(internal&&!staff)return fail('Solo el equipo puede dejar notas internas.',403);
+   const body=str(b.body),internal=b.internal===true;if(!body)return fail('Escribe un comentario.');if(internal&&!can('internal_notes'))return fail('Solo el equipo puede dejar notas internas.',403);
    const result=await c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved,internal) SELECT ?,?,?,?,?,?,0,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND client_id=? AND client_changed_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,body,new Date().toISOString(),c.role==='client'&&!preview?'client':'team',internal?1:0,existing.id,existing.client_id,existing.client_changed_at??'').run();if(!result.meta.changes)return fail('La publicación ha cambiado de cliente. Actualiza antes de comentar.',409);
   }else if(b.action==='review'){
    if(collaborator)return fail('La aprobación corresponde al cliente.',403);
@@ -209,7 +213,7 @@ async function POST(req:Request){
    const deleted=await c.db.batch([c.db.prepare(`INSERT INTO media_cleanup(id,object_keys,created_at) SELECT ?,(SELECT json_group_array(json_extract(value,'$.key')) FROM json_each(buffer_jobs.assets)),? FROM buffer_jobs WHERE post_id=? AND assets<>'[]' AND ${guard}`).bind(cleanupId,new Date().toISOString(),existing.id,existing.id,existing.updated_at),...['reviews','comments','buffer_jobs','posts'].map(table=>c.db.prepare(`DELETE FROM ${table} WHERE ${table==='posts'?'id':'post_id'}=? AND ${guard}`).bind(existing.id,existing.id,existing.updated_at))]);
    if(!deleted[4].meta.changes)return fail('La publicación ha cambiado o tiene un envío activo. Actualiza antes de eliminarla.',409);
   }else{
-   if(!staff&&!collaborator)return fail('Solo el equipo puede editar contenidos.',403);
+   if(!can('posts_edit'))return fail(collaborator?'Tu acceso no permite crear ni editar publicaciones.':'Solo el equipo puede editar contenidos.',403);
    const music=b.channel==='Instagram'&&b.format==='Reel'&&!!b.buffer_music?1:0,title=str(b.title,160),copy=str(b.copy,15000),asset=materialLinks(str(b.asset,42000)).join('\n'),date=str(b.date,16);
    if(!title||!channels.includes(b.channel)||!formats.includes(b.format)||!statuses.includes(b.status)||(date?(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))):!['Idea','Borrador'].includes(b.status)))return fail('Revisa título, fecha, canal y formato.');
    if(date&&new Date(date+'Z').toISOString().slice(0,16)!==date)return fail('La fecha no existe. Revisa el día y la hora.');
@@ -226,6 +230,7 @@ async function POST(req:Request){
    if(!existing&&['Aprobado','Planificado','Publicado'].includes(status))return fail('Crea el borrador y envíalo a revisión antes de aprobarlo.');
    if(existing&&['Aprobado','Planificado','Publicado'].includes(status)&&!['Aprobado','Planificado','Publicado'].includes(existing.status))return fail('Aprueba el contenido desde la revisión.');
    if(collaborator&&['Aprobado','Planificado','Publicado'].includes(status))return fail('El colaborador puede preparar y enviar contenido a revisión.',403);
+   if(status==='En revisión'&&b.status==='En revisión'&&existing?.status!=='En revisión'&&!can('posts_send'))return fail('Tu acceso no permite enviar publicaciones a revisión.',403);
    const changedAt=new Date().toISOString();
    const now=changedAt+':'+crypto.randomUUID();
    if(existing){const r=await c.db.prepare(`UPDATE posts SET title=?,copy=?,channel=?,format=?,date=?,status=?,asset=?,updated_at=?,client_id=?,client_changed_at=?,buffer_music=? WHERE id=? AND updated_at=? AND (?=0 OR NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id)) AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')}))`).bind(title,copy,b.channel,b.format,date,status,asset,now,b.client_id,reassign?changedAt:existing.client_changed_at??'',music,existing.id,b.updated_at,reassign?1:0).run();if(!r.meta.changes)return fail('Otra persona ha actualizado esta publicación. Recarga para ver los cambios.',409);}
