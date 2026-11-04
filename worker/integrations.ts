@@ -52,9 +52,7 @@ export async function integrationApi(request:Request,env:Env,user:User):Promise<
   }
   if(body.action==='cleanup'){
    if(!env.MEDIA)return fail('Conecta R2 antes de limpiar copias.');
-   const queued=await db.prepare('SELECT * FROM media_cleanup LIMIT 50').all<any>();for(const row of queued.results){const keys=JSON.parse(row.object_keys);if(keys.length)await env.MEDIA.delete(keys);await db.prepare('DELETE FROM media_cleanup WHERE id=?').bind(row.id).run();}
-   const cutoff=new Date(Date.now()-30*86400000).toISOString();const jobs=await db.prepare("SELECT post_id,assets FROM buffer_jobs WHERE state='sent' AND completed_at<? AND assets<>'[]' LIMIT 50").bind(cutoff).all<any>();
-   for(const job of jobs.results){const keys=JSON.parse(job.assets).map((a:any)=>a.key);if(keys.length)await env.MEDIA.delete(keys);await db.prepare("UPDATE buffer_jobs SET assets='[]' WHERE post_id=? AND state='sent'").bind(job.post_id).run();}return Response.json({ok:true});
+   await cleanupMedia(env);return Response.json({ok:true});
   }
   const post=await db.prepare('SELECT * FROM posts WHERE id=?').bind(body.post_id??'').first<any>();if(!post)return fail('Publicación no encontrada.',404);
   const client=await db.prepare('SELECT id,archived FROM clients WHERE id=?').bind(post.client_id).first<any>();if(!client)return fail('Cliente no encontrado.',404);
@@ -133,6 +131,13 @@ async function scheduleStory(env:Env,post:any,client:any,job:any,body:any):Promi
    if(!uncertain&&assets.length)await env.MEDIA.delete(assets.map(a=>a.key));return fail(message,uncertain?409:400);}
 }
 
+/** Borra de R2 las copias pendientes de limpieza y las de envíos confirmados hace más de 30 días (también desde el cron, una vez por hora). */
+export async function cleanupMedia(env:Env){
+ const db=env.DB;if(!db||!env.MEDIA)return;
+ const queued=await db.prepare('SELECT * FROM media_cleanup LIMIT 50').all<any>();for(const row of queued.results){const keys=JSON.parse(row.object_keys);if(keys.length)await env.MEDIA.delete(keys);await db.prepare('DELETE FROM media_cleanup WHERE id=?').bind(row.id).run();}
+ const cutoff=new Date(Date.now()-30*86400000).toISOString();const jobs=await db.prepare("SELECT post_id,assets FROM buffer_jobs WHERE state='sent' AND completed_at<? AND assets<>'[]' LIMIT 50").bind(cutoff).all<any>();
+ for(const job of jobs.results){const keys=JSON.parse(job.assets).map((a:any)=>a.key);if(keys.length)await env.MEDIA.delete(keys);await db.prepare("UPDATE buffer_jobs SET assets='[]' WHERE post_id=? AND state='sent'").bind(job.post_id).run();}
+}
 export async function processStoryQueue(env:Env):Promise<void>{
  const db=env.DB;if(!db)return;
  const job=await db.prepare("SELECT * FROM buffer_jobs WHERE state='queued' ORDER BY created_at LIMIT 1").first<any>();if(!job)return;

@@ -10,13 +10,13 @@ export type Phase={id:string;name:string;start:string;end:string;milestone:strin
 export type Field={name:string;type:string;value:string;visible:boolean};
 export type ProjectOptions=Record<string,boolean>;
 export type ChecklistItem={text:string;done:boolean};
-type TemplateTask=[title:string,phase:number,client:boolean,visible:boolean,deliverable:boolean,views?:string[]];
+type TemplateTask=[title:string,phase:number,client:boolean,visible:boolean,deliverable:boolean,views?:string[],description?:string];
 export type ProjectTemplate={label:string;desc:string;viewer:string;phases:[name:string,days:number,milestone:string][];fields:[name:string,type:string,value:string,visible:boolean][];tasks:TemplateTask[];options?:Partial<ProjectOptions>};
 export const projectTemplates:Record<string,ProjectTemplate>={
  web:{label:'Página web',desc:'Diseño y desarrollo de una web',viewer:'web',
   phases:[['Descubrimiento',12,'Mapa del sitio aprobado'],['Diseño',19,'Diseño aprobado'],['Contenido',9,'Textos y fotos recibidos'],['Desarrollo',30,'Versión de prueba lista'],['Lanzamiento',5,'Web publicada']],
   fields:[['Dominio','Enlace','',true],['Plataforma','Lista','WordPress',true],['Idiomas','Texto','Español',true]],
-  tasks:[['Reunión inicial',0,false,true,false],['Enviar accesos al dominio y al hosting',0,true,true,false],['Mapa del sitio',0,false,true,true,['Documento']],['Maqueta de portada',1,false,true,true,['Escritorio','Móvil']],['Maqueta de páginas interiores',1,false,true,true,['Escritorio','Móvil']],['Enviar textos y fotos',2,true,true,false],['Maquetación y versión móvil',3,false,true,false],['Versión de prueba',3,false,true,true,['Enlace']],['Publicación y analítica',4,false,true,false]]},
+  tasks:[['Reunión inicial',0,false,true,false],['Darnos acceso al dominio y al hosting',0,true,true,false,undefined,'Por seguridad, no escribas usuarios ni contraseñas en los comentarios. Te indicaremos un canal seguro para enviarlos.'],['Mapa del sitio',0,false,true,true,['Documento']],['Maqueta de portada',1,false,true,true,['Escritorio','Móvil']],['Maqueta de páginas interiores',1,false,true,true,['Escritorio','Móvil']],['Enviar textos y fotos',2,true,true,false],['Maquetación y versión móvil',3,false,true,false],['Versión de prueba',3,false,true,true,['Enlace']],['Publicación y analítica',4,false,true,false]]},
  pack:{label:'Empaques',desc:'Diseño y fabricación de packaging',viewer:'pack',
   phases:[['Briefing',5,'Briefing cerrado'],['Diseño de artes',19,'Artes aprobados'],['Pruebas y muestras',12,'Muestra aprobada'],['Producción',33,'Fin de fabricación'],['Entrega',5,'Entrega en almacén']],
   fields:[['Material','Lista','',true],['Acabado','Texto','',true],['Cantidad por referencia','Número','',true],['Proveedor','Texto','',false],['Fecha de fabricación','Fecha','',true],['Seguimiento del envío','Enlace','',true]],
@@ -39,6 +39,7 @@ export function normalizeProject(raw:any){
  const phases:Phase[]=raw.phases.map((p:any)=>{if(!p||typeof p!=='object')throw Error('Revisa las fases.');const id=text(p.id,60,'Revisa las fases.',true);if(ids.has(id))throw Error('Revisa las fases.');ids.add(id);const ph={id,name:text(p.name,80,'Cada fase necesita un nombre (máximo 80 caracteres).',true),start:date(p.start),end:date(p.end),milestone:text(p.milestone,120,'El hito admite hasta 120 caracteres.')};if(ph.start&&ph.end&&ph.end<ph.start)throw Error(`La fase «${ph.name}» termina antes de empezar.`);return ph;});
  if(raw.fields!=null&&!Array.isArray(raw.fields)||(raw.fields?.length??0)>30)throw Error('Puedes guardar hasta 30 campos.');
  const fields:Field[]=(raw.fields??[]).map((f:any)=>({name:text(f?.name,60,'Cada campo necesita un nombre (máximo 60 caracteres).',true),type:fieldTypes.includes(f?.type)?f.type:'Texto',value:text(f?.value,500,'El valor de un campo admite hasta 500 caracteres.'),visible:f?.visible===true}));
+ for(const f of fields)if(f.type==='Enlace'&&f.value){if(!/^[a-z][a-z\d+.-]*:/i.test(f.value))f.value='https://'+f.value;let ok=false;try{const u=new URL(f.value);ok=['https:','http:'].includes(u.protocol)&&!u.username&&!u.password;}catch{}if(!ok)throw Error(`El campo «${f.name}» debe ser un enlace completo, por ejemplo https://…`);}
  const options:ProjectOptions={};for(const [k] of projectOptions)options[k]=raw.options&&typeof raw.options[k]==='boolean'?raw.options[k]:defaultOptions[k];
  if(raw.team!=null&&!Array.isArray(raw.team)||(raw.team?.length??0)>20)throw Error('Revisa el equipo del proyecto.');
  const team=[...new Set<string>((raw.team??[]).map((t:any)=>text(t,80,'Revisa el equipo del proyecto.')).filter(Boolean))];

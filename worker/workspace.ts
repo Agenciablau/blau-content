@@ -6,7 +6,7 @@ import {normalizeClientProfile,readClientProfile} from '../shared/client-profile
 import {lockedBufferStates,bufferState,sendsToBuffer} from '../shared/buffer-scheduling';
 import {sendWelcome} from './email-welcome';
 import {loadProjects,projectAction,projectActions} from './projects';
-import {loadNotes,noteAction,noteActions} from './project-notes';
+import {loadNotes,loadNoteViews,noteAction,noteActions} from './project-notes';
 import {readPermissions,normalizePermissions} from '../shared/collaborator-access';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
@@ -43,7 +43,7 @@ async function GET(req?:Request){
  if(req&&new URL(req.url).searchParams.get('export')==='1'){
   if(c.role!=='owner')return fail('Solo el administrador puede exportar.',403);
   const backup:any={exported_at:new Date().toISOString(),version:1};
-  for(const table of ['clients','posts','comments','reviews','members','key_dates','projects','project_tasks','project_comments','project_reviews','member_clients','project_notes'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
+  for(const table of ['clients','posts','comments','reviews','members','key_dates','projects','project_tasks','project_comments','project_reviews','member_clients','project_notes','project_note_views'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
   backup.owner_name=c.w.owner_name??'';
   return Response.json(backup,{headers:{'Cache-Control':'no-store','Content-Disposition':'attachment; filename=blau-content-backup.json'}});
  }
@@ -59,10 +59,10 @@ async function GET(req?:Request){
  const extraMarks=c.role==='owner'||c.role==='team'?(await c.db.prepare('SELECT email,client_id FROM member_clients ORDER BY rowid').all<any>()).results:[];
  const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?` WHERE client_id ${inSoc} AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))`:scoped?` WHERE client_id ${inSoc}`:'')).bind(...bs).all();
  const keyDates=await c.db.prepare('SELECT id,client_id,date,title,yearly FROM key_dates'+(scoped?` WHERE (${soc.length?'client_id IS NULL OR ':''}client_id ${inSoc})`:'')+' ORDER BY date').bind(...bs).all();
- const projectData=await loadProjects(c.db,c.role,scoped?own.projects:null,c.perms),projectNotes=c.role==='owner'||c.role==='team'?await loadNotes(c.db):[];
+ const projectData=await loadProjects(c.db,c.role,scoped?own.projects:null,c.perms),projectNotes=c.role==='owner'||c.role==='team'?await loadNotes(c.db):[],noteViews=c.role==='owner'?await loadNoteViews(c.db):[];
  const names=new Map<string,string>((await c.db.prepare("SELECT email,name FROM members WHERE name<>''").all<any>()).results.map((r:any)=>[r.email,r.name]));if(c.w.owner_name)names.set(c.w.email,c.w.owner_name);
  const named=(v:string)=>names.get(String(v??'').toLowerCase())||v;
- return Response.json({needsSetup:false,preview:!!preview,role:c.role,...(c.role==='collaborator'?{permissions:c.perms}:{}),user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),members:m.results.map((x:any)=>x.role==='collaborator'?{...x,client_ids:[x.client_id,...extraMarks.filter((e:any)=>e.email===x.email&&e.client_id!==x.client_id).map((e:any)=>e.client_id)]}:x),reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)})),...(c.role==='owner'||c.role==='team'?{projectNotes:projectNotes.map((x:any)=>({...x,author:named(x.author)}))}:{})},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({needsSetup:false,preview:!!preview,role:c.role,...(c.role==='collaborator'?{permissions:c.perms}:{}),user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),members:m.results.map((x:any)=>x.role==='collaborator'?{...x,client_ids:[x.client_id,...extraMarks.filter((e:any)=>e.email===x.email&&e.client_id!==x.client_id).map((e:any)=>e.client_id)]}:x),reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)})),...(c.role==='owner'||c.role==='team'?{projectNotes:projectNotes.map((x:any)=>({...x,author:named(x.author)}))}:{}),...(c.role==='owner'?{projectNoteViews:noteViews.map((x:any)=>({...x,name:named(x.email)}))}:{})},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
 async function POST(req:Request){
@@ -132,6 +132,7 @@ async function POST(req:Request){
    c.db.prepare(`DELETE FROM buffer_bindings WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM key_dates WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
    ...['project_reviews','project_comments'].map(t=>c.db.prepare(`DELETE FROM ${t} WHERE task_id IN (SELECT id FROM project_tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id=?)) AND ${guard}`).bind(id,id,current.name)),
+   c.db.prepare(`DELETE FROM project_note_views WHERE note_id IN (SELECT id FROM project_notes WHERE project_id IN (SELECT id FROM projects WHERE client_id=?)) AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM project_notes WHERE project_id IN (SELECT id FROM projects WHERE client_id=?) AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM project_tasks WHERE project_id IN (SELECT id FROM projects WHERE client_id=?) AND ${guard}`).bind(id,id,current.name),
    c.db.prepare(`DELETE FROM projects WHERE client_id=? AND ${guard}`).bind(id,id,current.name),
