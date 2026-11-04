@@ -29,5 +29,9 @@
       "binding": "MEDIA",
       "bucket_name": "blau-content-media"
     }
-  ]
+  ],
+  "previews": {
+    "d1_databases": [{"binding": "DB", "database_id": "905b8e7d-edd9-46c6-94f5-97e71a187eba"}],
+    "r2_buckets": [{"binding": "MEDIA", "bucket_name": "blau-content-media"}]
+  }
 }
