@@ -3,7 +3,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {build} from 'esbuild';
 async function module(file){const bundle=await build({entryPoints:[file],bundle:true,write:false,format:'esm',platform:'node',target:'es2022'});return import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));}
-const {integrationApi,processStoryQueue}=await module('worker/integrations.ts'),{createWorkspaceApi}=await module('worker/workspace.ts'),{madridToUtc,bufferState}=await module('shared/buffer-scheduling.ts');
+const {integrationApi,processStoryQueue,cleanupMedia}=await module('worker/integrations.ts'),{createWorkspaceApi}=await module('worker/workspace.ts'),{madridToUtc,bufferState}=await module('shared/buffer-scheduling.ts');
 assert.equal(madridToUtc('2030-01-15T10:00'),'2030-01-15T09:00:00.000Z');assert.equal(madridToUtc('2030-07-15T10:00'),'2030-07-15T08:00:00.000Z');assert.throws(()=>madridToUtc('2026-03-29T02:30'));assert.throws(()=>madridToUtc('2026-10-25T02:30'));assert.throws(()=>madridToUtc('2030-02-31T10:00'));
 assert.equal(bufferState({status:'sent',schedulingType:'notification',notificationStatus:'notified'}),'notification_sent');assert.equal(bufferState({status:'sent',schedulingType:'notification',notificationStatus:'markedAsPublished'}),'sent');
 const {normalizeClientProfile}=await module('shared/client-profile.ts');const {monthlyCommitmentProgress}=await module('shared/monthly-commitments.ts');
@@ -104,7 +104,7 @@ await workspaceAction(user,{action:'delete',id:'p7'});
 assert.equal(await db.prepare("SELECT id FROM posts WHERE id='p7'").first(),null);
 assert.equal(await db.prepare("SELECT post_id FROM buffer_jobs WHERE post_id='p7'").first(),null);
 assert.ok((await db.prepare('SELECT COUNT(*) AS n FROM media_cleanup').first()).n>0);
-await api({action:'cleanup'});
+await cleanupMedia(env);assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM media_cleanup').first()).n,0,'The scheduled cleanup empties the queue');
 // Reels: music already in the video → scheduled; music to add in Buffer → draft. Both need a client approval and a video file.
 assert.equal((await db.prepare("SELECT COUNT(*) n FROM buffer_jobs WHERE state='queued'").first()).n,0);
 async function reviewReel(id,music,asset='https://drive.google.com/file/d/videoA/view'){await addPost(id,'En revisión');await db.prepare("UPDATE posts SET format='Reel',copy='Texto del reel #blau',buffer_music=?,asset=? WHERE id=?").bind(music,asset,id).run();await workspaceAction(clientIdentity,{action:'review',id,status:'Aprobado',updated_at:'v1'});}

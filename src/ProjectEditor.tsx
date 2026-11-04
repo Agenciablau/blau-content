@@ -5,11 +5,11 @@ const tplIcons:Record<string,any>={web:Globe,pack:Package,brand:Palette,blank:Fi
 const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const days=(a:string,b:string)=>Math.round((Date.parse(b+'T12:00Z')-Date.parse(a+'T12:00Z'))/864e5);
-type Row={title:string;phase_id:string;client_task:boolean;visible:boolean;deliverable:boolean;views:string[]};
+type Row={title:string;description?:string;phase_id:string;client_task:boolean;visible:boolean;deliverable:boolean;views:string[]};
 function fromTemplate(key:string,start:string,base:any){
  const t=projectTemplates[key]??projectTemplates.blank;let cursor=start;
  const phases:Phase[]=t.phases.map(([name,d,milestone])=>{const ph={id:uid(),name,start:cursor,end:addDays(cursor,Math.max(1,d)-1),milestone};cursor=addDays(ph.end,1);return ph;});
- return {...base,template:key,start,viewer:t.viewer,phases,fields:t.fields.map(([name,type,value,visible])=>({name,type,value,visible})),tasks:t.tasks.map(([title,ph,client,visible,deliverable,views])=>({title,phase_id:phases[ph]?.id??phases[0].id,client_task:client,visible,deliverable,views:views??[]})),options:{...defaultOptions,...t.options}};
+ return {...base,template:key,start,viewer:t.viewer,phases,fields:t.fields.map(([name,type,value,visible])=>({name,type,value,visible})),tasks:t.tasks.map(([title,ph,client,visible,deliverable,views,description])=>({title,description:description??'',phase_id:phases[ph]?.id??phases[0].id,client_task:client,visible,deliverable,views:views??[]})),options:{...defaultOptions,...t.options}};
 }
 export default function ProjectEditor({project,clients,clientId,owner,busy,error,onSave,onCancel,onDelete}:{project?:any;clients:any[];clientId:string;owner:boolean;busy:boolean;error:string;onSave:(body:any)=>void;onCancel:()=>void;onDelete:(name:string)=>void}){
  const editing=!!project;
