@@ -1,0 +1,1 @@
+ALTER TABLE project_notes ADD COLUMN visible INTEGER NOT NULL DEFAULT 0;
