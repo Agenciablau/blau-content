@@ -582,3 +582,4 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .pn-client{display:grid;gap:12px}.pn-citem{display:grid;gap:6px;padding-top:10px;border-top:1px solid #eef1f4}.pn-citem:first-of-type{padding-top:0;border-top:0}.pn-citem .pn-body{margin:0}
 
 .pj-card.dragging,.post-card.dragging{opacity:.4}.pj-ph,.day-ph{background:#dfe5ea;border-radius:10px;min-height:56px}.day.drop{outline:2px solid #13dbfb;outline-offset:-2px}.post-card[draggable=true]{cursor:grab}
+.pj-card[draggable=true],.post-card[draggable=true]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
