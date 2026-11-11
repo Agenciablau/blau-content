@@ -1,3 +1,4 @@
+import {startDrag} from './drag';
 import {useState,useEffect,useRef} from 'react';
 import {Pencil,Plus,Eye,EyeOff,CheckSquare,MessageCircle,X,ExternalLink,Check,Send,Trash2,Lock,Clock3,ImageOff,LayoutGrid,UserRound,Monitor,ChevronDown,Link2,NotebookPen} from 'lucide-react';
 import {taskColumns,projectStatuses,deliverableViews,parseJson,projectPhases,currentPhaseIndex,progress,defaultOptions,type Phase,type Field,type ChecklistItem} from '../shared/projects';
@@ -41,21 +42,22 @@ export default function ProjectPage(props:Props){
 }
 function Board({data,project:p,busy,error,mutate}:Props){
  const tasks=projectTasksOf(data,p.id),phases=projectPhases(p),cur=currentPhaseIndex(phases,tasks),pct=progress(tasks),pending=clientPending(p,tasks),delay=projectDelay(p,tasks),[lateOnly,setLateOnly]=useState(false);
- const edit=canDo(data,'tasks_edit'),[phase,setPhase]=useState('all'),[open,setOpen]=useState<any>(null),[over,setOver]=useState(''),drag=useRef<any>(null);
+ const edit=canDo(data,'tasks_edit'),[phase,setPhase]=useState('all'),[open,setOpen]=useState<any>(null),[over,setOver]=useState(''),drag=useRef<any>(null),[dragId,setDragId]=useState('');
  const shown=tasks.filter((t:any)=>(phase==='all'||t.phase_id===phase)&&(!lateOnly||delay?.late.includes(t)));
  const comments=(id:string)=>(data.projectComments??[]).filter((c:any)=>c.task_id===id).length;
- async function drop(col:string){if(!edit)return;const t=drag.current;drag.current=null;setOver('');if(!t||t.column_key===col)return;await mutate({action:'moveTask',id:t.id,column_key:col,updated_at:t.updated_at},`Tarea movida a «${colLabel(col)}»`);}
+ async function drop(col:string){if(!edit)return;const t=drag.current;drag.current=null;setOver('');setDragId('');if(!t||t.column_key===col)return;await mutate({action:'moveTask',id:t.id,column_key:col,updated_at:t.updated_at},`Tarea movida a «${colLabel(col)}»`);}
  const live=open?.id?tasks.find((t:any)=>t.id===open.id):null;
  return <>
   <div className="pj-summary"><div className="pj-tile"><small>Fases</small><div className="pj-phases">{phases.map((ph,i)=><div key={ph.id} className={'pj-phase '+(i<cur?'done':i===cur?'now':'')} title={`${ph.name} · ${fd(ph.start)} – ${fd(ph.end)}`}><i/><span>{ph.name}</span></div>)}</div></div><div className="pj-tile"><small>Avance</small><strong>{pct}%</strong><div className="pj-bar"><i style={{width:pct+'%'}}/></div></div><div className="pj-tile"><small>En manos del cliente</small><strong>{pending.length} {pending.length===1?'tarea':'tareas'}</strong></div><div className={'pj-tile pj-delay'+(delay?' late':' ok')}><small>Plazos</small>{delay?<><strong>Con retraso · {delay.days} {delay.days===1?'día':'días'}</strong>{delay.phases.map(ph=><span key={ph.id}>{ph.name} terminaba el {fd(ph.end)}</span>)}{delay.late.length>0&&<button type="button" className="text-btn" onClick={()=>setLateOnly(!lateOnly)}>{lateOnly?'Ver todas las tareas':`${delay.late.length} ${delay.late.length===1?'tarea vencida':'tareas vencidas'}`}</button>}</>:<strong>Al día</strong>}</div></div>
   <div className="pj-toolbar"><div className="pj-chips" role="group" aria-label="Filtrar por fase"><button className="pj-chip" aria-pressed={phase==='all'} onClick={()=>setPhase('all')}>Todas las fases</button>{phases.map(ph=><button key={ph.id} className="pj-chip" aria-pressed={phase===ph.id} onClick={()=>setPhase(ph.id)}>{ph.name}</button>)}</div>{edit&&<button className="primary" onClick={()=>setOpen({phase_id:phase!=='all'?phase:phases[cur]?.id,column_key:'todo',visible:true})}><Plus size={16}/>Nueva tarea</button>}</div>
   <div className="pj-board-wrap"><div className="pj-board">{taskColumns.map(([key,label])=>{const list=shown.filter((t:any)=>t.column_key===key);return <section key={key} className={'pj-col '+key+(over===key?' drop':'')} aria-label={label} onDragOver={e=>{e.preventDefault();setOver(key);}} onDragLeave={()=>setOver(o=>o===key?'':o)} onDrop={e=>{e.preventDefault();drop(key);}}>
    <h3>{label}<b>{list.length}</b></h3>
-   {list.map((t:any)=>{const ck=parseJson<ChecklistItem[]>(t.checklist,[]),n=comments(t.id),ph=phases.find(x=>x.id===t.phase_id);return <button key={t.id} className="pj-card" draggable={edit&&!busy} onDragStart={()=>{drag.current=t;}} onDragEnd={()=>setOver('')} onClick={()=>setOpen(t)}>
+   {list.map((t:any)=>{const ck=parseJson<ChecklistItem[]>(t.checklist,[]),n=comments(t.id),ph=phases.find(x=>x.id===t.phase_id);return <button key={t.id} className={'pj-card'+(dragId===t.id?' dragging':'')} draggable={edit&&!busy} onDragStart={e=>{drag.current=t;startDrag(e);setTimeout(()=>setDragId(t.id),0);}} onDragEnd={()=>{setOver('');setDragId('');}} onClick={()=>setOpen(t)}>
     <span className="pj-t">{t.title}</span>
     <span className="pj-tags">{ph&&<span className="pj-tag">{ph.name}</span>}{!!t.deliverable&&<span className="pj-tag deliv">Entregable</span>}{!!t.client_task&&<span className="pj-tag client">Cliente</span>}</span>
     <span className="pj-meta"><span className="l">{t.due&&<span className={t.due<day()&&key!=='done'?'late':''}><Clock3 size={13}/>{fd(t.due)}</span>}{ck.length>0&&<span><CheckSquare size={13}/>{ck.filter(c=>c.done).length}/{ck.length}</span>}{n>0&&<span><MessageCircle size={13}/>{n}</span>}<span className={'vis'+(t.visible?'':' off')} title={t.visible?'Lo ve el cliente':'Solo el equipo'}>{t.visible?<Eye size={13}/>:<EyeOff size={13}/>}</span></span>{t.assignee&&<span className="pj-av" title={t.assignee}>{t.assignee.slice(0,1).toUpperCase()}</span>}</span>
    </button>;})}
+   {over===key&&dragId&&drag.current?.column_key!==key&&<div className="pj-ph" aria-hidden="true"/>}
   </section>;})}</div></div>
   <p className="pj-hint">{edit?'Arrastra las tarjetas entre columnas o abre una tarea para cambiar su estado.':'Abre una tarea para ver el detalle y comentar.'}</p>
   {open&&<TaskDrawer key={open.id??'new'} data={data} project={p} task={live??open} busy={busy} error={error} mutate={mutate} onClose={()=>setOpen(null)}/>}
