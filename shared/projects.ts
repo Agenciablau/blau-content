@@ -10,8 +10,8 @@ export type Phase={id:string;name:string;start:string;end:string;milestone:strin
 export type Field={name:string;type:string;value:string;visible:boolean};
 export type ProjectOptions=Record<string,boolean>;
 export type ChecklistItem={text:string;done:boolean};
-type TemplateTask=[title:string,phase:number,client:boolean,visible:boolean,deliverable:boolean,views?:string[],description?:string];
-export type ProjectTemplate={label:string;desc:string;viewer:string;phases:[name:string,days:number,milestone:string][];fields:[name:string,type:string,value:string,visible:boolean][];tasks:TemplateTask[];options?:Partial<ProjectOptions>};
+type TemplateTask=[title:string,phase:number,client:boolean,visible:boolean,deliverable:boolean,views?:string[],description?:string,dueDay?:number];
+export type ProjectTemplate={label:string;desc:string;viewer:string;phases:[name:string,days:number,milestone:string][];fields:[name:string,type:string,value:string,visible:boolean][];tasks:TemplateTask[];options?:Partial<ProjectOptions>;cadence?:'monthly'};
 export const projectTemplates:Record<string,ProjectTemplate>={
  web:{label:'Página web',desc:'Diseño y desarrollo de una web',viewer:'web',
   phases:[['Descubrimiento',12,'Mapa del sitio aprobado'],['Diseño',19,'Diseño aprobado'],['Contenido',9,'Textos y fotos recibidos'],['Desarrollo',30,'Versión de prueba lista'],['Lanzamiento',5,'Web publicada']],
@@ -25,6 +25,8 @@ export const projectTemplates:Record<string,ProjectTemplate>={
   phases:[['Investigación',10,'Informe de marca'],['Concepto',14,'Concepto elegido'],['Identidad',22,'Logotipo aprobado'],['Manual de marca',26,'Manual entregado']],
   fields:[['Valores de marca','Texto','',true]],
   tasks:[['Entrevista con el cliente',0,false,true,false],['Cuestionario de marca',0,true,true,false],['Propuestas de concepto',1,false,true,true,['Imagen']],['Logotipo',2,false,true,true,['Imagen','Aplicaciones']],['Manual de marca',3,false,true,true,['Documento']]]},
+ monthly:{label:'Mensual',desc:'Servicio que se repite cada mes, como una estrategia de comunicación',viewer:'gallery',cadence:'monthly',phases:[['Mes actual',30,'']],fields:[],
+  tasks:[['Reunión de planificación',0,false,true,false,undefined,'',2],['Estrategia y calendario del mes',0,false,true,true,['Documento'],'',6],['Aprobación del cliente',0,true,true,false,undefined,'',10],['Revisión de métricas',0,false,true,false,undefined,'',27],['Informe del mes',0,false,true,true,['Documento'],'',30]]},
  blank:{label:'En blanco',desc:'Empieza sin nada y configúralo',viewer:'gallery',phases:[['Fase 1',28,'']],fields:[],tasks:[]}};
 export const defaultOptions:ProjectOptions={pct:true,hist:true,prod:true,lock:false};
 const date=(v:unknown)=>{if(v===''||v==null)return '';if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v)||new Date(v+'T00:00Z').toISOString().slice(0,10)!==v)throw Error('Revisa las fechas del proyecto.');return v;};
@@ -34,7 +36,8 @@ export function normalizeProject(raw:any){
  if(!raw||typeof raw!=='object')throw Error('Datos del proyecto no válidos.');
  const name=text(raw.name,120,'Escribe el nombre del proyecto (máximo 120 caracteres).',true),summary=text(raw.summary,1000,'El resumen admite hasta 1.000 caracteres.');
  const template=Object.hasOwn(projectTemplates,raw.template)?raw.template:'blank',viewer=projectViewers.some(v=>v[0]===raw.viewer)?raw.viewer:'gallery',status=projectStatuses.some(s=>s[0]===raw.status)?raw.status:'active';
- if(!Array.isArray(raw.phases)||!raw.phases.length||raw.phases.length>20)throw Error('El proyecto necesita entre 1 y 20 fases.');
+ const cadence=raw.cadence==='monthly'?'monthly':'';
+ if(!Array.isArray(raw.phases)||!raw.phases.length||raw.phases.length>(cadence?120:20))throw Error(cadence?'El proyecto mensual admite hasta 120 meses.':'El proyecto necesita entre 1 y 20 fases.');
  const ids=new Set<string>();
  const phases:Phase[]=raw.phases.map((p:any)=>{if(!p||typeof p!=='object')throw Error('Revisa las fases.');const id=text(p.id,60,'Revisa las fases.',true);if(ids.has(id))throw Error('Revisa las fases.');ids.add(id);const ph={id,name:text(p.name,80,'Cada fase necesita un nombre (máximo 80 caracteres).',true),start:date(p.start),end:date(p.end),milestone:text(p.milestone,120,'El hito admite hasta 120 caracteres.')};if(ph.start&&ph.end&&ph.end<ph.start)throw Error(`La fase «${ph.name}» termina antes de empezar.`);return ph;});
  if(raw.fields!=null&&!Array.isArray(raw.fields)||(raw.fields?.length??0)>30)throw Error('Puedes guardar hasta 30 campos.');
@@ -43,7 +46,7 @@ export function normalizeProject(raw:any){
  const options:ProjectOptions={};for(const [k] of projectOptions)options[k]=raw.options&&typeof raw.options[k]==='boolean'?raw.options[k]:defaultOptions[k];
  if(raw.team!=null&&!Array.isArray(raw.team)||(raw.team?.length??0)>20)throw Error('Revisa el equipo del proyecto.');
  const team=[...new Set<string>((raw.team??[]).map((t:any)=>text(t,80,'Revisa el equipo del proyecto.')).filter(Boolean))];
- return {name,summary,template,viewer,status,phases,fields,options,team};
+ return {name,summary,template,viewer,status,cadence,phases,fields,options,team};
 }
 export function normalizeTask(raw:any,phaseIds:string[]){
  if(!raw||typeof raw!=='object')throw Error('Datos de la tarea no válidos.');
@@ -62,6 +65,7 @@ export function parseJson<T>(v:unknown,fallback:T):T{try{const x=typeof v==='str
 export function projectPhases(p:any):Phase[]{const x=parseJson<Phase[]>(p?.phases,[]);return Array.isArray(x)?x:[];}
 /** Fase actual: la más avanzada con trabajo en curso; si no hay, la primera con tareas pendientes; si no, por fechas. */
 export function currentPhaseIndex(phases:Phase[],tasks:any[],today=new Date().toISOString().slice(0,10)){
+ const mi=phases.findIndex(ph=>ph.id==='m-'+today.slice(0,7));if(mi>=0)return mi;
  const active=phases.map((ph,i)=>tasks.some(t=>t.phase_id===ph.id&&['doing','wait','review'].includes(t.column_key))?i:-1).filter(i=>i>=0);
  if(active.length)return Math.max(...active);
  const open=phases.findIndex(ph=>tasks.some(t=>t.phase_id===ph.id&&t.column_key!=='done'));
@@ -70,3 +74,16 @@ export function currentPhaseIndex(phases:Phase[],tasks:any[],today=new Date().to
  return dated>=0?dated:Math.max(0,phases.length-1);
 }
 export const progress=(tasks:any[])=>tasks.length?Math.round(tasks.filter(t=>t.column_key==='done').length/tasks.length*100):0;
+
+/** Proyectos mensuales: cada mes es una fase con id «m-AAAA-MM». */
+const pad2=(n:number)=>String(n).padStart(2,'0'),monthNames=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+export const isMonthKey=(v:unknown):v is string=>typeof v==='string'&&/^\d{4}-(0[1-9]|1[0-2])$/.test(v);
+export const monthLast=(ym:string)=>new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5),0)).getUTCDate();
+export const monthPhase=(ym:string):Phase=>({id:'m-'+ym,name:monthNames[+ym.slice(5)-1]+' '+ym.slice(0,4),start:ym+'-01',end:ym+'-'+pad2(monthLast(ym)),milestone:''});
+export const nextMonth=(ym:string)=>{const y=+ym.slice(0,4),m=+ym.slice(5);return m===12?`${y+1}-01`:`${y}-${pad2(m+1)}`;};
+export const monthsOf=(phases:Phase[]):string[]=>phases.map(p=>/^m-(\d{4}-\d{2})$/.exec(p.id)?.[1]??'').filter(Boolean).sort();
+/** Copia de una tarea del mes anterior para el mes `ym`: vuelve a «Por hacer», conserva el día del mes y reinicia el checklist. */
+export function cloneForMonth(t:any,ym:string){
+ const d=/^\d{4}-\d{2}-(\d{2})$/.exec(t.due||'');
+ return {title:t.title,description:t.description??'',phase_id:'m-'+ym,column_key:'todo',assignee:t.assignee??'',due:d?ym+'-'+pad2(Math.min(+d[1],monthLast(ym))):'',visible:t.visible?1:0,client_task:t.client_task?1:0,deliverable:t.deliverable?1:0,views:typeof t.views==='string'?t.views:JSON.stringify(t.views??[]),checklist:JSON.stringify(parseJson<ChecklistItem[]>(t.checklist,[]).map(c=>({text:c.text,done:false}))),links:''};
+}

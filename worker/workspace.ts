@@ -7,6 +7,7 @@ import {lockedBufferStates,bufferState,sendsToBuffer} from '../shared/buffer-sch
 import {sendWelcome} from './email-welcome';
 import {loadProjects,projectAction,projectActions} from './projects';
 import {loadNotes,loadNoteViews,noteAction,noteActions} from './project-notes';
+import {loadWeek,weekAction,weekActions,weekSince} from './week';
 import {readPermissions,normalizePermissions} from '../shared/collaborator-access';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
@@ -43,7 +44,7 @@ async function GET(req?:Request){
  if(req&&new URL(req.url).searchParams.get('export')==='1'){
   if(c.role!=='owner')return fail('Solo el administrador puede exportar.',403);
   const backup:any={exported_at:new Date().toISOString(),version:1};
-  for(const table of ['clients','posts','comments','reviews','members','key_dates','projects','project_tasks','project_comments','project_reviews','member_clients','project_notes','project_note_views'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
+  for(const table of ['clients','posts','comments','reviews','members','key_dates','projects','project_tasks','project_comments','project_reviews','member_clients','project_notes','project_note_views','week_plan','week_notes'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
   backup.owner_name=c.w.owner_name??'';
   return Response.json(backup,{headers:{'Cache-Control':'no-store','Content-Disposition':'attachment; filename=blau-content-backup.json'}});
  }
@@ -59,10 +60,10 @@ async function GET(req?:Request){
  const extraMarks=c.role==='owner'||c.role==='team'?(await c.db.prepare('SELECT email,client_id FROM member_clients ORDER BY rowid').all<any>()).results:[];
  const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?` WHERE client_id ${inSoc} AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))`:scoped?` WHERE client_id ${inSoc}`:'')).bind(...bs).all();
  const keyDates=await c.db.prepare('SELECT id,client_id,date,title,yearly FROM key_dates'+(scoped?` WHERE (${soc.length?'client_id IS NULL OR ':''}client_id ${inSoc})`:'')+' ORDER BY date').bind(...bs).all();
- const projectData=await loadProjects(c.db,c.role,scoped?own.projects:null,c.perms),projectNotes=c.role==='owner'||c.role==='team'?await loadNotes(c.db):client?await loadNotes(c.db,own.projects):[],noteViews=c.role==='owner'?await loadNoteViews(c.db):[];
+ const projectData=await loadProjects(c.db,c.role,scoped?own.projects:null,c.perms),projectNotes=c.role==='owner'||c.role==='team'?await loadNotes(c.db):client?await loadNotes(c.db,own.projects):[],noteViews=c.role==='owner'?await loadNoteViews(c.db):[],week=c.role==='owner'?await loadWeek(c.db,weekSince(new Date().toISOString())):null;
  const names=new Map<string,string>((await c.db.prepare("SELECT email,name FROM members WHERE name<>''").all<any>()).results.map((r:any)=>[r.email,r.name]));if(c.w.owner_name)names.set(c.w.email,c.w.owner_name);
  const named=(v:string)=>names.get(String(v??'').toLowerCase())||v;
- return Response.json({needsSetup:false,preview:!!preview,role:c.role,...(c.role==='collaborator'?{permissions:c.perms}:{}),user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),members:m.results.map((x:any)=>x.role==='collaborator'?{...x,client_ids:[x.client_id,...extraMarks.filter((e:any)=>e.email===x.email&&e.client_id!==x.client_id).map((e:any)=>e.client_id)]}:x),reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)})),...(c.role==='owner'||c.role==='team'||client?{projectNotes:projectNotes.map((x:any)=>({...x,author:named(x.author)}))}:{}),...(c.role==='owner'?{projectNoteViews:noteViews.map((x:any)=>({...x,name:named(x.email)}))}:{})},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({needsSetup:false,preview:!!preview,role:c.role,...(c.role==='collaborator'?{permissions:c.perms}:{}),user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),members:m.results.map((x:any)=>x.role==='collaborator'?{...x,client_ids:[x.client_id,...extraMarks.filter((e:any)=>e.email===x.email&&e.client_id!==x.client_id).map((e:any)=>e.client_id)]}:x),reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)})),...(c.role==='owner'||c.role==='team'||client?{projectNotes:projectNotes.map((x:any)=>({...x,author:named(x.author)}))}:{}),...(week?week:{}),...(c.role==='owner'?{projectNoteViews:noteViews.map((x:any)=>({...x,name:named(x.email)}))}:{})},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
 async function POST(req:Request){
@@ -91,6 +92,7 @@ async function POST(req:Request){
  const own=staff?null:await scopeOf(c.db,c.clientIds),soc=own?.social??[];
  if(collaborator&&!own?.rows.length)return fail('Tu acceso no tiene una marca asignada válida.',403);
  if(noteActions.includes(b.action))return noteAction(env,{db:c.db,role:c.role,preview:!!preview,clientIds:own?.projects??[],user:c.user},b);
+ if(weekActions.includes(b.action)){const r=await weekAction({db:c.db,role:c.role,preview:!!preview},b);return r??Response.json({ok:true});}
  if(projectActions.includes(b.action)){const r=await projectAction({db:c.db,role:c.role,clientIds:own?.projects??[],perms:c.perms,user:c.user,preview:!!preview},b);return r??Response.json({ok:true});}
  if(['post','review','comment','delete','editComment','resolveComments'].includes(b.action)&&own&&!soc.length)return fail('Tu acceso no incluye redes sociales.',403);
  if(b.action==='resolveComments'){

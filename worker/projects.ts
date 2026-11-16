@@ -1,9 +1,9 @@
-import {normalizeProject,normalizeTask,projectPhases,columnKeys} from '../shared/projects';
+import {normalizeProject,normalizeTask,projectPhases,columnKeys,isMonthKey,monthPhase,monthsOf,nextMonth,cloneForMonth} from '../shared/projects';
 type Ctx={db:D1Database;role:string;clientIds:string[];perms:string[];user:{email:string;displayName:string};preview:boolean};
 const fail=(error:string,status=400)=>Response.json({error},{status});
 const str=(x:any,max=5000)=>typeof x==='string'?x.trim().slice(0,max):'';
 const version=()=>new Date().toISOString()+':'+crypto.randomUUID();
-export const projectActions=['project','deleteProject','task','moveTask','deleteTask','taskComment','taskReview','taskSent','taskCommentEdit'];
+export const projectActions=['project','openMonth','deleteProject','task','moveTask','deleteTask','taskComment','taskReview','taskSent','taskCommentEdit'];
 const marks=(ids:string[])=>`IN (${ids.map(()=>'?').join(',')||'NULL'})`;
 /** clientIds: marcas con proyectos visibles para cliente o colaborador (null para el equipo). */
 export async function loadProjects(db:D1Database,role:string,clientIds:string[]|null,perms:string[]=[]){
@@ -31,13 +31,13 @@ export async function projectAction(c:Ctx,b:any):Promise<Response|null>{
  if(b.action==='project'){
   if(!has('projects_edit'))return fail('Solo el equipo puede gestionar proyectos.',403);
   let p;try{p=normalizeProject(b);}catch(e){return fail(e instanceof Error?e.message:'Datos del proyecto no válidos.');}
-  const now=new Date().toISOString(),v=version(),cols=[p.name,p.summary,p.template,p.viewer,p.status,JSON.stringify(p.phases),JSON.stringify(p.fields),JSON.stringify(p.options),JSON.stringify(p.team)];
+  const now=new Date().toISOString(),v=version(),cols=[p.name,p.summary,p.template,p.viewer,p.status,JSON.stringify(p.phases),JSON.stringify(p.fields),JSON.stringify(p.options),JSON.stringify(p.team),p.cadence];
   if(b.id){
    const existing=await db.prepare('SELECT * FROM projects WHERE id=?').bind(str(b.id,100)).first<any>();if(!existing||scoped&&!c.clientIds.includes(existing.client_id))return fail('Proyecto no encontrado.',404);
    if(existing.updated_at!==b.updated_at)return fail('Otra persona ha cambiado el proyecto. Recarga para ver los cambios.',409);
    const ids=p.phases.map(x=>x.id),orphan=await db.prepare(`SELECT title FROM project_tasks WHERE project_id=? AND phase_id NOT IN (${ids.map(()=>'?').join(',')}) LIMIT 1`).bind(existing.id,...ids).first<any>();
    if(orphan)return fail(`La tarea «${orphan.title}» está en una fase que quieres quitar. Muévela antes.`,409);
-   const r=await db.prepare('UPDATE projects SET name=?,summary=?,template=?,viewer=?,status=?,phases=?,fields=?,options=?,team=?,updated_at=? WHERE id=? AND updated_at=?').bind(...cols,v,existing.id,b.updated_at).run();
+   const r=await db.prepare('UPDATE projects SET name=?,summary=?,template=?,viewer=?,status=?,phases=?,fields=?,options=?,team=?,cadence=?,updated_at=? WHERE id=? AND updated_at=?').bind(...cols,v,existing.id,b.updated_at).run();
    if(!r.meta.changes)return fail('Otra persona ha cambiado el proyecto. Recarga para ver los cambios.',409);
    return null;
   }
@@ -46,15 +46,32 @@ export async function projectAction(c:Ctx,b:any):Promise<Response|null>{
   if(b.tasks!=null&&(!Array.isArray(b.tasks)||b.tasks.length>100))return fail('Puedes crear hasta 100 tareas iniciales.');
   let tasks:ReturnType<typeof normalizeTask>[];try{tasks=(b.tasks??[]).map((t:any)=>normalizeTask(t,p.phases.map(x=>x.id)));}catch(e){return fail(e instanceof Error?e.message:'Revisa las tareas.');}
   const id=crypto.randomUUID();
-  await db.batch([db.prepare('INSERT INTO projects(id,client_id,name,summary,template,viewer,status,phases,fields,options,team,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,str(b.client_id,100),...cols,now,v),...tasks.map((t,i)=>db.prepare('INSERT INTO project_tasks(id,project_id,phase_id,column_key,position,title,description,assignee,due,visible,client_task,deliverable,views,checklist,links,done_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),id,t.phase_id,t.column_key,i,t.title,t.description,t.assignee,t.due,t.visible,t.client_task,t.deliverable,t.views,t.checklist,t.links,t.column_key==='done'?now:'',now,version()))]);
+  await db.batch([db.prepare('INSERT INTO projects(id,client_id,name,summary,template,viewer,status,phases,fields,options,team,cadence,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,str(b.client_id,100),...cols,now,v),...tasks.map((t,i)=>db.prepare('INSERT INTO project_tasks(id,project_id,phase_id,column_key,position,title,description,assignee,due,visible,client_task,deliverable,views,checklist,links,done_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),id,t.phase_id,t.column_key,i,t.title,t.description,t.assignee,t.due,t.visible,t.client_task,t.deliverable,t.views,t.checklist,t.links,t.column_key==='done'?now:'',now,version()))]);
   return Response.json({ok:true,id});
+ }
+ if(b.action==='openMonth'){
+  if(!has('projects_edit'))return fail('Solo el equipo puede abrir un mes.',403);
+  const pr=await db.prepare('SELECT * FROM projects WHERE id=?').bind(str(b.id,100)).first<any>();if(!pr||scoped&&!c.clientIds.includes(pr.client_id))return fail('Proyecto no encontrado.',404);
+  if(pr.cadence!=='monthly')return fail('Este proyecto no es mensual.');
+  if(pr.updated_at!==b.updated_at)return fail('Otra persona ha cambiado el proyecto. Recarga para ver los cambios.',409);
+  const phases=projectPhases(pr),months=monthsOf(phases),last=months[months.length-1],ym=b.month==null?(last?nextMonth(last):new Date().toISOString().slice(0,7)):b.month;
+  if(!isMonthKey(ym))return fail('Mes no válido.');
+  if(months.includes(ym))return fail('Ese mes ya está abierto.',409);
+  if(phases.length>=120)return fail('El proyecto ya tiene 120 meses.');
+  const src=[...months].reverse().find(m=>m<ym),srcTasks=src?(await db.prepare('SELECT * FROM project_tasks WHERE project_id=? AND phase_id=? ORDER BY position,created_at').bind(pr.id,'m-'+src).all<any>()).results:[];
+  const now=new Date().toISOString(),next=[...phases,monthPhase(ym)].sort((x,y)=>x.start.localeCompare(y.start)),v=version();
+  const r=await db.prepare('UPDATE projects SET phases=?,updated_at=? WHERE id=? AND updated_at=?').bind(JSON.stringify(next),v,pr.id,b.updated_at).run();
+  if(!r.meta.changes)return fail('Otra persona ha cambiado el proyecto. Recarga para ver los cambios.',409);
+  const pos=(await db.prepare('SELECT COALESCE(MAX(position),-1)+1 AS n FROM project_tasks WHERE project_id=?').bind(pr.id).first<any>())?.n??0;
+  if(srcTasks.length)await db.batch(srcTasks.map((s:any,i:number)=>{const t=cloneForMonth(s,ym);return db.prepare('INSERT INTO project_tasks(id,project_id,phase_id,column_key,position,title,description,assignee,due,visible,client_task,deliverable,views,checklist,links,done_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),pr.id,t.phase_id,t.column_key,pos+i,t.title,t.description,t.assignee,t.due,t.visible,t.client_task,t.deliverable,t.views,t.checklist,t.links,'',now,version());}));
+  return null;
  }
  if(b.action==='deleteProject'){
   if(c.role!=='owner')return fail('Solo el administrador puede eliminar proyectos.',403);
   const p=await db.prepare('SELECT id,name FROM projects WHERE id=?').bind(str(b.id,100)).first<any>();if(!p)return fail('Proyecto no encontrado.',404);
   if(b.confirmName!==p.name)return fail('Escribe el nombre exacto del proyecto para eliminarlo.');
   const inTasks='task_id IN (SELECT id FROM project_tasks WHERE project_id=?)';
-  await db.batch([db.prepare(`DELETE FROM project_reviews WHERE ${inTasks}`).bind(p.id),db.prepare(`DELETE FROM project_comments WHERE ${inTasks}`).bind(p.id),db.prepare('DELETE FROM project_note_views WHERE note_id IN (SELECT id FROM project_notes WHERE project_id=?)').bind(p.id),db.prepare('DELETE FROM project_notes WHERE project_id=?').bind(p.id),db.prepare('DELETE FROM project_tasks WHERE project_id=?').bind(p.id),db.prepare('DELETE FROM projects WHERE id=?').bind(p.id)]);
+  await db.batch([db.prepare(`DELETE FROM project_reviews WHERE ${inTasks}`).bind(p.id),db.prepare(`DELETE FROM project_comments WHERE ${inTasks}`).bind(p.id),db.prepare('DELETE FROM project_note_views WHERE note_id IN (SELECT id FROM project_notes WHERE project_id=?)').bind(p.id),db.prepare('DELETE FROM project_notes WHERE project_id=?').bind(p.id),db.prepare("DELETE FROM week_plan WHERE kind='task' AND ref_id IN (SELECT id FROM project_tasks WHERE project_id=?)").bind(p.id),db.prepare('DELETE FROM project_tasks WHERE project_id=?').bind(p.id),db.prepare('DELETE FROM projects WHERE id=?').bind(p.id)]);
   return null;
  }
  const task=b.id?await db.prepare('SELECT t.*,p.client_id,p.phases,p.options FROM project_tasks t JOIN projects p ON p.id=t.project_id WHERE t.id=?').bind(str(b.id,100)).first<any>():null;
@@ -89,7 +106,7 @@ export async function projectAction(c:Ctx,b:any):Promise<Response|null>{
  }
  if(b.action==='deleteTask'){
   if(!staff)return fail('Solo el equipo puede eliminar tareas.',403);
-  await db.batch([db.prepare('DELETE FROM project_reviews WHERE task_id=?').bind(task.id),db.prepare('DELETE FROM project_comments WHERE task_id=?').bind(task.id),db.prepare('DELETE FROM project_tasks WHERE id=?').bind(task.id)]);
+  await db.batch([db.prepare('DELETE FROM project_reviews WHERE task_id=?').bind(task.id),db.prepare('DELETE FROM project_comments WHERE task_id=?').bind(task.id),db.prepare("DELETE FROM week_plan WHERE kind='task' AND ref_id=?").bind(task.id),db.prepare('DELETE FROM project_tasks WHERE id=?').bind(task.id)]);
   return null;
  }
  const role=staff||c.preview?'team':c.role;

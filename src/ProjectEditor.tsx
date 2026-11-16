@@ -1,19 +1,20 @@
 import {useState} from 'react';
 import {Globe,Package,Palette,FilePlus2,Monitor,Box,Images,FileText,ChevronUp,ChevronDown,Trash2,Plus,X,Check} from 'lucide-react';
-import {projectTemplates,projectViewers,deliverableViews,fieldTypes,projectStatuses,projectOptions,defaultOptions,addDays,parseJson,projectPhases,type Phase,type Field} from '../shared/projects';
+import {monthLast,monthPhase,projectTemplates,projectViewers,deliverableViews,fieldTypes,projectStatuses,projectOptions,defaultOptions,addDays,parseJson,projectPhases,type Phase,type Field} from '../shared/projects';
 const tplIcons:Record<string,any>={web:Globe,pack:Package,brand:Palette,blank:FilePlus2},viewerIcons:Record<string,any>={web:Monitor,pack:Box,gallery:Images,doc:FileText};
 const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const days=(a:string,b:string)=>Math.round((Date.parse(b+'T12:00Z')-Date.parse(a+'T12:00Z'))/864e5);
-type Row={title:string;description?:string;phase_id:string;client_task:boolean;visible:boolean;deliverable:boolean;views:string[]};
+type Row={title:string;description?:string;due?:string;phase_id:string;client_task:boolean;visible:boolean;deliverable:boolean;views:string[]};
 function fromTemplate(key:string,start:string,base:any){
  const t=projectTemplates[key]??projectTemplates.blank;let cursor=start;
- const phases:Phase[]=t.phases.map(([name,d,milestone])=>{const ph={id:uid(),name,start:cursor,end:addDays(cursor,Math.max(1,d)-1),milestone};cursor=addDays(ph.end,1);return ph;});
- return {...base,template:key,start,viewer:t.viewer,phases,fields:t.fields.map(([name,type,value,visible])=>({name,type,value,visible})),tasks:t.tasks.map(([title,ph,client,visible,deliverable,views,description])=>({title,description:description??'',phase_id:phases[ph]?.id??phases[0].id,client_task:client,visible,deliverable,views:views??[]})),options:{...defaultOptions,...t.options}};
+ const monthly=t.cadence==='monthly',ym=start.slice(0,7),pad=(n:number)=>String(n).padStart(2,'0');
+ const phases:Phase[]=monthly?[monthPhase(ym)]:t.phases.map(([name,d,milestone])=>{const ph={id:uid(),name,start:cursor,end:addDays(cursor,Math.max(1,d)-1),milestone};cursor=addDays(ph.end,1);return ph;});
+ return {...base,template:key,cadence:t.cadence??'',start,viewer:t.viewer,phases,fields:t.fields.map(([name,type,value,visible])=>({name,type,value,visible})),tasks:t.tasks.map(([title,ph,client,visible,deliverable,views,description,dueDay])=>({title,description:description??'',due:monthly&&dueDay?ym+'-'+pad(Math.min(dueDay,monthLast(ym))):'',phase_id:phases[ph]?.id??phases[0].id,client_task:client,visible,deliverable,views:views??[]})),options:{...defaultOptions,...t.options}};
 }
 export default function ProjectEditor({project,clients,clientId,owner,busy,error,onSave,onCancel,onDelete}:{project?:any;clients:any[];clientId:string;owner:boolean;busy:boolean;error:string;onSave:(body:any)=>void;onCancel:()=>void;onDelete:(name:string)=>void}){
  const editing=!!project;
- const [d,setD]=useState<any>(()=>{if(project){const phases=projectPhases(project);return {id:project.id,updated_at:project.updated_at,client_id:project.client_id,name:project.name,summary:project.summary,template:project.template,viewer:project.viewer,status:project.status,start:phases[0]?.start||today(),phases,fields:parseJson<Field[]>(project.fields,[]),team:parseJson<string[]>(project.team,[]),options:{...defaultOptions,...parseJson(project.options,{})},tasks:[]};}
+ const [d,setD]=useState<any>(()=>{if(project){const phases=projectPhases(project);return {id:project.id,updated_at:project.updated_at,client_id:project.client_id,name:project.name,summary:project.summary,template:project.template,viewer:project.viewer,status:project.status,cadence:project.cadence||'',start:phases[0]?.start||today(),phases,fields:parseJson<Field[]>(project.fields,[]),team:parseJson<string[]>(project.team,[]),options:{...defaultOptions,...parseJson(project.options,{})},tasks:[]};}
   return fromTemplate('web',today(),{client_id:clients.some(c=>c.id===clientId)?clientId:clients.length===1?clients[0].id:'',name:'',summary:'',status:'active',team:[]});});
  const [person,setPerson]=useState(''),[confirmName,setConfirmName]=useState('');
  const set=(k:string,v:any)=>setD((x:any)=>({...x,[k]:v}));
@@ -21,14 +22,14 @@ export default function ProjectEditor({project,clients,clientId,owner,busy,error
  const drop=(k:string,i:number)=>setD((x:any)=>({...x,[k]:x[k].filter((_:any,j:number)=>j!==i)}));
  const moveRow=(k:string,i:number,s:number)=>setD((x:any)=>{const a=[...x[k]];if(i+s<0||i+s>=a.length)return x;[a[i],a[i+s]]=[a[i+s],a[i]];return {...x,[k]:a};});
  function template(key:string){if(d.template===key)return;if((d.name||d.tasks.length)&&d.template!=='blank'&&!confirm('Al cambiar de plantilla se sustituyen las fases, los campos y las tareas. ¿Quieres continuar?'))return;setD(fromTemplate(key,d.start||today(),d));}
- function start(v:string){if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){set('start',v);return;}const delta=d.start?days(d.start,v):0;setD((x:any)=>({...x,start:v,phases:x.phases.map((p:Phase)=>({...p,start:p.start&&addDays(p.start,delta),end:p.end&&addDays(p.end,delta)}))}));}
+ function start(v:string){if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){set('start',v);return;}if(!editing&&d.cadence==='monthly'){setD(fromTemplate(d.template,v,d));return;}const delta=d.start?days(d.start,v):0;setD((x:any)=>({...x,start:v,phases:x.phases.map((p:Phase)=>({...p,start:p.start&&addDays(p.start,delta),end:p.end&&addDays(p.end,delta)}))}));}
  function addPhase(){const last=d.phases[d.phases.length-1],s=last?.end?addDays(last.end,1):d.start||today();set('phases',[...d.phases,{id:uid(),name:'',start:s,end:addDays(s,13),milestone:''}]);}
  function removePhase(i:number){const ph=d.phases[i];if(d.phases.length===1)return;setD((x:any)=>({...x,phases:x.phases.filter((_:any,j:number)=>j!==i),tasks:x.tasks.map((t:Row)=>t.phase_id===ph.id?{...t,phase_id:x.phases[i===0?1:0].id}:t)}));}
  function addPerson(){const n=person.trim();if(n&&!d.team.includes(n)&&d.team.length<20)set('team',[...d.team,n]);setPerson('');}
  const client=clients.find(c=>c.id===d.client_id),ph:Phase[]=d.phases,end=ph[ph.length-1]?.end,tasks:Row[]=d.tasks;
  const deliverables=tasks.filter(t=>t.deliverable).length,clientTasks=tasks.filter(t=>t.client_task).length,hidden=tasks.filter(t=>!t.visible).length;
  const fd=(v:string)=>v?new Date(v+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'}):'Sin fecha';
- function submit(e:React.FormEvent){e.preventDefault();onSave({action:'project',...(editing?{id:d.id,updated_at:d.updated_at}:{client_id:d.client_id,tasks:tasks.map(t=>({...t,column_key:'todo'}))}),name:d.name,summary:d.summary,template:d.template,viewer:d.viewer,status:d.status,phases:ph.map(({id,name,start,end,milestone})=>({id,name,start,end,milestone})),fields:d.fields,team:d.team,options:d.options});}
+ function submit(e:React.FormEvent){e.preventDefault();onSave({action:'project',...(editing?{id:d.id,updated_at:d.updated_at}:{client_id:d.client_id,tasks:tasks.map(t=>({...t,column_key:'todo'}))}),name:d.name,summary:d.summary,template:d.template,cadence:d.cadence||'',viewer:d.viewer,status:d.status,phases:ph.map(({id,name,start,end,milestone})=>({id,name,start,end,milestone})),fields:d.fields,team:d.team,options:d.options});}
  const sections=[...(editing?[]:[['pe-tpl','Plantilla']]),['pe-data','Datos básicos'],['pe-phases','Fases y fechas'],['pe-viewer','Entregables'],['pe-fields','Campos del proyecto'],...(editing?[]:[['pe-tasks','Tareas iniciales']]),['pe-team','Equipo'],['pe-opts','Lo que ve el cliente']];
  return <form className="pj pj-editor" onSubmit={submit}>
   <nav className="pe-nav" aria-label="Secciones del formulario">{sections.map(([id,l],i)=><a key={id} href={'#'+id}><span>{i+1}</span>{l}</a>)}</nav>
@@ -38,7 +39,7 @@ export default function ProjectEditor({project,clients,clientId,owner,busy,error
     <label>Cliente<select value={d.client_id} disabled={editing} onChange={e=>set('client_id',e.target.value)} required><option value="">Selecciona un cliente</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
     <label>Nombre del proyecto<input value={d.name} maxLength={120} required placeholder="Ej.: Página web" onChange={e=>set('name',e.target.value)}/></label>
     <label>Fecha de inicio<input type="date" value={d.start} onChange={e=>start(e.target.value)}/><small>Al cambiarla se desplazan todas las fases.</small></label>
-    {editing?<label>Estado<select value={d.status} onChange={e=>set('status',e.target.value)}>{projectStatuses.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></label>:<div/>}
+    {editing?<label>Estado<select value={d.status} onChange={e=>set('status',e.target.value)}>{projectStatuses.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></label>:<div/>}{editing&&<label>Tipo de proyecto<small className="pe-note">En un proyecto mensual cada mes es una fase y se abre desde el propio proyecto.</small><select value={d.cadence||''} onChange={e=>set('cadence',e.target.value)}><option value="">Con inicio y final</option><option value="monthly">Mensual continuo</option></select></label>}
     <label className="pe-full">Resumen para el cliente<textarea value={d.summary} maxLength={1000} rows={3} placeholder="Qué vamos a hacer y qué conseguiremos. Lo verá el cliente en la cabecera del proyecto." onChange={e=>set('summary',e.target.value)}/></label>
    </div></section>
    <section className="pe-fs" id="pe-phases"><header><div><h3>Fases y fechas</h3><p>El cliente ve en qué fase estamos y cuándo termina cada una. El hito es lo que cierra la fase.</p></div></header><div className="pe-rows">{ph.map((p,i)=><div className="pe-row" key={p.id}>
