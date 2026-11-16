@@ -17,7 +17,7 @@ export default function MyWeek({data,busy,mutate,onOpenTask,onOpenPost}:Props){
  const plan:any[]=(data.weekPlan??[]).filter((c:any)=>c.week===week),notes=(data.weekNotes??[]).find((n:any)=>n.week===week);
  const col=(id:string)=>clients.find(c=>c.id===id),prj=(id:string)=>projects.find(p=>p.id===id);
  const taskItem=(t:any):Item|null=>{const p=prj(t.project_id);if(!p)return null;const c=col(p.client_id),ph=projectPhases(p).find(x=>x.id===t.phase_id);return {key:'t'+t.id,kind:'task',ref:t.id,title:t.title,color:c?.color??'#9aa5ab',brand:c?.name??'',sub:`${p.name}${ph?' · '+ph.name:''}`,tag:colLabel(t.column_key),tone:t.column_key==='wait'?'wait':t.column_key==='review'?'rev':'',late:!!t.due&&t.due<now&&t.column_key!=='done',done:t.column_key==='done',project:p,task:t};};
- const postItem=(p:any):Item=>{const c=col(p.client_id);return {key:'p'+p.id,kind:'post',ref:p.id,title:p.title,color:c?.color??'#9aa5ab',brand:c?.name??'',sub:`${p.format} · ${p.channel}`,tag:p.status,tone:p.status==='En revisión'?'rev':'',late:false,done:p.status==='Publicado',post:p};};
+ const postItem=(p:any):Item=>{const c=col(p.client_id);return {key:'p'+p.id,kind:'post',ref:p.id,title:p.title,color:c?.color??'#9aa5ab',brand:c?.name??'',sub:`${p.format} · ${p.channel}${p.date?' · '+p.date.slice(8,10)+'/'+p.date.slice(5,7):''}`,tag:p.status,tone:p.status==='En revisión'?'rev':'',late:false,done:p.status==='Publicado',post:p};};
  const placed=useMemo(()=>new Set(plan.filter(c=>c.kind!=='free').map(c=>c.kind+':'+c.ref_id)),[plan]);
  const hiddenSet=useMemo(()=>new Set<string>((data.weekHidden??[]).map((h:any)=>h.kind+':'+h.ref_id)),[data.weekHidden]),isHidden=(kind:string,id:string)=>hiddenSet.has(kind+':'+id);
  const inBrand=(clientId:string)=>brand==='all'||clientId===brand;
@@ -26,7 +26,7 @@ export default function MyWeek({data,busy,mutate,onOpenTask,onOpenPost}:Props){
  const take=(list:any[],mk:(x:any)=>Item|null)=>list.map(mk).filter((i):i is Item=>!!i&&!seen.has(i.key)&&!!seen.add(i.key));
  const groups:[string,Item[]][]=[
   ['Vencido o esperando al cliente',take(open.filter(t=>(t.due&&t.due<now)||t.column_key==='wait'),taskItem)],
-  ['Publicaciones de la semana',take(posts.filter(p=>p.date&&p.date.slice(0,10)>=week&&p.date.slice(0,10)<=weekEnd&&['Borrador','Cambios solicitados'].includes(p.status)&&inBrand(p.client_id)&&!placed.has('post:'+p.id)&&!isHidden('post',p.id)),postItem)],
+  ['Publicaciones por preparar',take(posts.filter(p=>['Borrador','Cambios solicitados'].includes(p.status)&&inBrand(p.client_id)&&!placed.has('post:'+p.id)&&!isHidden('post',p.id)),postItem)],
   ['Tareas con fecha esta semana',take(open.filter(t=>t.due&&t.due>=week&&t.due<=weekEnd),taskItem)],
   ['Mes en curso de proyectos mensuales',take(open.filter(t=>{const p=prj(t.project_id);return p.cadence==='monthly'&&t.phase_id==='m-'+now.slice(0,7);}),taskItem)],
   ['En curso',take(open.filter(t=>t.column_key==='doing'||t.column_key==='review'),taskItem)]
