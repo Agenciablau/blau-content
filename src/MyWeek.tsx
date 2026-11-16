@@ -5,13 +5,13 @@ import {addWeeks,dayOf,mondayOf} from '../shared/week';
 import {keyDatesFor,customDatesFor} from '../shared/key-dates';
 import {projectPhases,taskColumns} from '../shared/projects';
 // «Mi semana»: solo para el administrador. Las tarjetas son punteros a tareas y publicaciones; el Worker guarda día y orden, y el título y el estado se leen siempre del original.
-type Props={data:any;busy:boolean;mutate:(body:any,msg:string|((d:any)=>string))=>Promise<any>;onOpenTask:(projectId:string,taskId:string)=>void;onOpenPost:(p:any)=>void};
+type Props={data:any;busy:boolean;mutate:(body:any,msg:string|((d:any)=>string))=>Promise<any>;onOpenTask:(projectId:string,taskId:string)=>void;onOpenPost:(p:any)=>void;clientId?:string|null};
 const dayNames=['Lun','Mar','Mié','Jue','Vie'],today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 const colLabel=(k:string)=>taskColumns.find(c=>c[0]===k)?.[1]??k;
 const range=(w:string)=>{const a=new Date(dayOf(w,0)+'T12:00'),b=new Date(dayOf(w,4)+'T12:00'),m=(d:Date)=>d.toLocaleDateString('es-ES',{month:'long'});return a.getMonth()===b.getMonth()?`Del ${a.getDate()} al ${b.getDate()} de ${m(b)}`:`Del ${a.getDate()} de ${m(a)} al ${b.getDate()} de ${m(b)}`;};
 type Item={key:string;kind:'task'|'post'|'free';ref:string;title:string;color:string;brand:string;sub:string;tag:string;tone:string;late:boolean;done:boolean;project?:any;post?:any;task?:any};
-export default function MyWeek({data,busy,mutate,onOpenTask,onOpenPost}:Props){
- const now=today(),[week,setWeek]=useState(()=>mondayOf(now)),[brand,setBrand]=useState('all'),[over,setOver]=useState(''),[adding,setAdding]=useState<number|null>(null),[showHidden,setShowHidden]=useState(false),[freeTitle,setFreeTitle]=useState('');
+export default function MyWeek({data,busy,mutate,onOpenTask,onOpenPost,clientId}:Props){
+ const now=today(),[week,setWeek]=useState(()=>mondayOf(now)),[over,setOver]=useState(''),[adding,setAdding]=useState<number|null>(null),[showHidden,setShowHidden]=useState(false),[freeTitle,setFreeTitle]=useState('');
  const drag=useRef<any>(null),[dragKey,setDragKey]=useState('');
  const clients:any[]=data.clients,projects:any[]=data.projects??[],tasks:any[]=data.projectTasks??[],posts:any[]=data.posts??[];
  const plan:any[]=(data.weekPlan??[]).filter((c:any)=>c.week===week),notes=(data.weekNotes??[]).find((n:any)=>n.week===week);
@@ -20,7 +20,7 @@ export default function MyWeek({data,busy,mutate,onOpenTask,onOpenPost}:Props){
  const postItem=(p:any):Item=>{const c=col(p.client_id);return {key:'p'+p.id,kind:'post',ref:p.id,title:p.title,color:c?.color??'#9aa5ab',brand:c?.name??'',sub:`${p.format} · ${p.channel}${p.date?' · '+p.date.slice(8,10)+'/'+p.date.slice(5,7):''}`,tag:p.status,tone:p.status==='En revisión'?'rev':'',late:false,done:p.status==='Publicado',post:p};};
  const placed=useMemo(()=>new Set(plan.filter(c=>c.kind!=='free').map(c=>c.kind+':'+c.ref_id)),[plan]);
  const hiddenSet=useMemo(()=>new Set<string>((data.weekHidden??[]).map((h:any)=>h.kind+':'+h.ref_id)),[data.weekHidden]),isHidden=(kind:string,id:string)=>hiddenSet.has(kind+':'+id);
- const inBrand=(clientId:string)=>brand==='all'||clientId===brand;
+ const brand=clientId||'all',inBrand=(clientId:string)=>brand==='all'||clientId===brand;
  const open=tasks.filter(t=>t.column_key!=='done'&&prj(t.project_id)&&prj(t.project_id).status!=='paused'&&prj(t.project_id).status!=='done'&&inBrand(prj(t.project_id).client_id)&&!placed.has('task:'+t.id)&&!isHidden('task',t.id));
  const weekEnd=dayOf(week,6),seen=new Set<string>();
  const take=(list:any[],mk:(x:any)=>Item|null)=>list.map(mk).filter((i):i is Item=>!!i&&!seen.has(i.key)&&!!seen.add(i.key));
@@ -59,8 +59,7 @@ export default function MyWeek({data,busy,mutate,onOpenTask,onOpenPost}:Props){
  return <div className="wk">
   <div className="page-heading"><div><span className="page-eyebrow">Solo para el administrador</span><h1>Mi semana</h1><p>{range(week)}{isNow?' · esta semana':''}</p></div><div className="wk-nav"><button className="icon-btn" aria-label="Semana anterior" onClick={()=>setWeek(addWeeks(week,-1))}><ChevronLeft size={18}/></button><button className="secondary-btn" disabled={isNow} onClick={()=>setWeek(mondayOf(now))}>Esta semana</button><button className="icon-btn" aria-label="Semana siguiente" onClick={()=>setWeek(next)}><ChevronRight size={18}/></button><button className="primary" onClick={()=>{setAdding(0);setFreeTitle('');}}><Plus size={16}/>Tarjeta libre</button></div></div>
   <section className="wk-focus" aria-label="Foco de la semana"><h2>Foco de la semana</h2>{[0,1,2].map(i=><label key={i}><i>{i+1}</i><input value={focus[i]} title={focus[i]} maxLength={160} placeholder={['Lo más importante','Lo segundo','Lo tercero'][i]} aria-label={`Prioridad ${i+1}`} onChange={e=>setFocus(focus.map((x,j)=>j===i?e.target.value:x))} onBlur={()=>saveNotes()}/></label>)}</section>
-  <div className="wk-chips" aria-label="Alertas"><span className="wk-chip"><u style={{background:'#e5484d'}}/><b>{late}</b> {late===1?'tarea vencida':'tareas vencidas'}</span><span className="wk-chip"><u style={{background:'#d98a1f'}}/><b>{waiting}</b> esperando al cliente</span><span className="wk-chip"><u style={{background:'#13dbfb'}}/><b>{toReview}</b> {toReview===1?'publicación por aprobar':'publicaciones por aprobar'}</span>{keys.slice(0,3).map((k:any)=><span className="wk-chip" key={k.date+k.title}>{new Date(k.date+'T12:00').toLocaleDateString('es-ES',{weekday:'short',day:'numeric'})} · <b>{k.title}</b></span>)}
-   <label className="wk-brand">Marca<select value={brand} onChange={e=>setBrand(e.target.value)}><option value="all">Todas las marcas</option>{clients.filter(c=>!c.archived).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div>
+  <div className="wk-chips" aria-label="Alertas"><span className="wk-chip"><u style={{background:'#e5484d'}}/><b>{late}</b> {late===1?'tarea vencida':'tareas vencidas'}</span><span className="wk-chip"><u style={{background:'#d98a1f'}}/><b>{waiting}</b> esperando al cliente</span><span className="wk-chip"><u style={{background:'#13dbfb'}}/><b>{toReview}</b> {toReview===1?'publicación por aprobar':'publicaciones por aprobar'}</span>{keys.slice(0,3).map((k:any)=><span className="wk-chip" key={k.date+k.title}>{new Date(k.date+'T12:00').toLocaleDateString('es-ES',{weekday:'short',day:'numeric'})} · <b>{k.title}</b></span>)}</div>
   <div className="wk-layout">
    <aside className={'wk-tray'+(over==='tray'?' over':'')} aria-label="Por colocar" data-drop="tray" onDragOver={e=>{if(drag.current?.id){e.preventDefault();setOver('tray');}}} onDragLeave={()=>setOver('')} onDrop={e=>{e.preventDefault();void unplace();}}>
     <h2>Por colocar</h2>
