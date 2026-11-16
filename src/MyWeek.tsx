@@ -33,7 +33,7 @@ export default function MyWeek({data,busy,mutate,onOpenTask,onOpenPost,clientId}
   ['En curso',take(open.filter(t=>t.column_key==='doing'||t.column_key==='review'),taskItem)],
   ['Otras tareas por hacer',take(open,taskItem)]
  ].filter(g=>g[1].length) as [string,Item[]][];
- const hiddenItems=(data.weekHidden??[]).map((h:any)=>h.kind==='task'?(()=>{const t=tasks.find(x=>x.id===h.ref_id);return t?taskItem(t):null;})():(()=>{const p=posts.find(x=>x.id===h.ref_id);return p?postItem(p):null;})()).filter((i:Item|null):i is Item=>!!i);
+ const hiddenItems=(data.weekHidden??[]).map((h:any)=>h.kind==='task'?(()=>{const t=tasks.find(x=>x.id===h.ref_id);return t?taskItem(t):null;})():(()=>{const p=posts.find(x=>x.id===h.ref_id);return p?postItem(p):null;})()).filter((i:Item|null):i is Item=>!!i&&inBrand(i.task?i.project.client_id:i.post.client_id));
  const itemOf=(c:any):Item|null=>{if(c.kind==='free')return {key:'f'+c.id,kind:'free',ref:c.id,title:c.title,color:'#9aa5ab',brand:'',sub:'Tarjeta libre',tag:'',tone:'',late:false,done:!!c.done};if(c.kind==='task'){const t=tasks.find(x=>x.id===c.ref_id);return t?taskItem(t):null;}const p=posts.find(x=>x.id===c.ref_id);if(!p)return null;const it=postItem(p);it.done=it.done||!!c.done;return it;};
  const cards=plan.map(c=>({c,item:itemOf(c)})).filter(x=>x.item&&(x.c.kind==='free'||brand==='all'||(x.item.task?inBrand(x.item.project.client_id):x.item.post?inBrand(x.item.post.client_id):true))) as {c:any;item:Item}[];
  const byDay=(d:number)=>cards.filter(x=>x.c.day===d).sort((a,b)=>a.c.position-b.c.position);
