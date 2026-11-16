@@ -2,16 +2,23 @@ import {isWeek,isDay,addWeeks,normalizeFocus} from '../shared/week';
 type Ctx={db:D1Database;role:string;preview:boolean};
 const fail=(error:string,status=400)=>Response.json({error},{status});
 const str=(x:any,max=5000)=>typeof x==='string'?x.trim().slice(0,max):'';
-export const weekActions=['weekPlace','weekUnplace','weekFree','weekDone','weekFlag','weekNotes','weekCarry'];
+export const weekActions=['weekHide','weekPlace','weekUnplace','weekFree','weekDone','weekFlag','weekNotes','weekCarry'];
 /** Solo el administrador (nunca desde la vista previa de cliente) ve y cambia su plan semanal. */
 export async function loadWeek(db:D1Database,since:string){
  const plan=(await db.prepare('SELECT * FROM week_plan WHERE week>=? ORDER BY week,day,position').bind(since).all()).results,notes=(await db.prepare('SELECT * FROM week_notes WHERE week>=? ORDER BY week').bind(since).all()).results;
- return {weekPlan:plan,weekNotes:notes};
+ const hidden=(await db.prepare('SELECT kind,ref_id FROM week_hidden ORDER BY created_at').all()).results;
+ return {weekPlan:plan,weekNotes:notes,weekHidden:hidden};
 }
 async function renumber(db:D1Database,week:string,day:number,order:string[]){await db.batch(order.map((id,i)=>db.prepare('UPDATE week_plan SET day=?,position=?,updated_at=? WHERE id=? AND week=?').bind(day,i,new Date().toISOString(),id,week)));}
 export async function weekAction(c:Ctx,b:any):Promise<Response|null>{
  if(c.role!=='owner'||c.preview)return fail('Solo el administrador puede organizar su semana.',403);
  const {db}=c,now=new Date().toISOString();
+ if(b.action==='weekHide'){
+  const ref=str(b.ref_id,100);if(!['task','post'].includes(b.kind)||!ref)return fail('Tipo de tarjeta no válido.');
+  if(b.hidden===false)await db.prepare('DELETE FROM week_hidden WHERE kind=? AND ref_id=?').bind(b.kind,ref).run();
+  else{if(!await db.prepare(b.kind==='task'?'SELECT id FROM project_tasks WHERE id=?':'SELECT id FROM posts WHERE id=?').bind(ref).first())return fail('Tarjeta no encontrada.',404);await db.prepare('INSERT OR IGNORE INTO week_hidden(kind,ref_id,created_at) VALUES(?,?,?)').bind(b.kind,ref,now).run();}
+  return null;
+ }
  if(b.action==='weekNotes'){
   if(!isWeek(b.week))return fail('Semana no válida.');
   let focus:string[];try{focus=normalizeFocus(b.focus);}catch(e){return fail(e instanceof Error?e.message:'Revisa el foco.');}

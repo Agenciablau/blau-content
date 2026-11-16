@@ -44,7 +44,7 @@ async function GET(req?:Request){
  if(req&&new URL(req.url).searchParams.get('export')==='1'){
   if(c.role!=='owner')return fail('Solo el administrador puede exportar.',403);
   const backup:any={exported_at:new Date().toISOString(),version:1};
-  for(const table of ['clients','posts','comments','reviews','members','key_dates','projects','project_tasks','project_comments','project_reviews','member_clients','project_notes','project_note_views','week_plan','week_notes'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
+  for(const table of ['clients','posts','comments','reviews','members','key_dates','projects','project_tasks','project_comments','project_reviews','member_clients','project_notes','project_note_views','week_plan','week_notes','week_hidden'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
   backup.owner_name=c.w.owner_name??'';
   return Response.json(backup,{headers:{'Cache-Control':'no-store','Content-Disposition':'attachment; filename=blau-content-backup.json'}});
  }
