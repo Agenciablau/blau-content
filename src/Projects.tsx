@@ -30,7 +30,7 @@ export function clientPending(p:any,tasks:any[]){
 }
 /** Equipo: todo. Colaborador: según sus permisos. */
 const canDo=(data:any,k:string)=>data.role==='owner'||data.role==='team'||data.role==='collaborator'&&!data.preview&&(data.permissions??[]).includes(k);
-type Props={data:any;project:any;busy:boolean;error:string;mutate:(body:any,msg:string)=>Promise<any>;onEdit:()=>void};
+type Props={data:any;project:any;busy:boolean;error:string;mutate:(body:any,msg:string)=>Promise<any>;onEdit:()=>void;focusTask?:string|null;onFocused?:()=>void};
 export default function ProjectPage(props:Props){
  const {data,project:p}=props,staff=data.role==='owner'||data.role==='team',board=canDo(data,'tasks_board');
  const [tab,setTab]=useState<'board'|'notes'|'client'>('board'),notesOk=staff&&!data.preview,nNotes=(data.projectNotes??[]).filter((n:any)=>n.project_id===p.id).length;
@@ -40,13 +40,14 @@ export default function ProjectPage(props:Props){
   {board&&tab==='board'?<Board {...props}/>:notesOk&&tab==='notes'?<ProjectNotes {...props}/>:<Status {...props} staffView={board}/>}
  </div>;
 }
-function Board({data,project:p,busy,error,mutate}:Props){
+function Board({data,project:p,busy,error,mutate,focusTask,onFocused}:Props){
  const tasks=projectTasksOf(data,p.id),phases=projectPhases(p),cur=currentPhaseIndex(phases,tasks),mon=p.cadence==='monthly',pct=progress(mon?tasks.filter((t:any)=>t.phase_id===phases[cur]?.id):tasks),pending=clientPending(p,tasks),delay=projectDelay(p,tasks),[lateOnly,setLateOnly]=useState(false);
  const edit=canDo(data,'tasks_edit'),[phase,setPhase]=useState('all'),[open,setOpen]=useState<any>(null),[over,setOver]=useState(''),drag=useRef<any>(null),[dragId,setDragId]=useState('');
  const shown=tasks.filter((t:any)=>(phase==='all'||t.phase_id===phase)&&(!lateOnly||delay?.late.includes(t)));
  const comments=(id:string)=>(data.projectComments??[]).filter((c:any)=>c.task_id===id).length;
  async function drop(col:string){if(!edit)return;const t=drag.current;drag.current=null;setOver('');setDragId('');if(!t||t.column_key===col)return;await mutate({action:'moveTask',id:t.id,column_key:col,updated_at:t.updated_at},`Tarea movida a «${colLabel(col)}»`);}
  const live=open?.id?tasks.find((t:any)=>t.id===open.id):null;
+ useEffect(()=>{if(!focusTask)return;const t=tasks.find((x:any)=>x.id===focusTask);if(t)setOpen(t);onFocused?.();},[focusTask]);
  return <>
   <div className="pj-summary"><div className="pj-tile"><small>Fases</small><div className="pj-phases">{phases.map((ph,i)=>mon&&Math.abs(i-cur)>2?null:<div key={ph.id} className={'pj-phase '+(i<cur?'done':i===cur?'now':'')} title={`${ph.name} · ${fd(ph.start)} – ${fd(ph.end)}`}><i/><span>{ph.name}</span></div>)}</div></div><div className="pj-tile"><small>{mon?'Avance del mes':'Avance'}</small><strong>{pct}%</strong><div className="pj-bar"><i style={{width:pct+'%'}}/></div></div><div className="pj-tile"><small>En manos del cliente</small><strong>{pending.length} {pending.length===1?'tarea':'tareas'}</strong></div><div className={'pj-tile pj-delay'+(delay?' late':' ok')}><small>Plazos</small>{delay?<><strong>Con retraso · {delay.days} {delay.days===1?'día':'días'}</strong>{delay.phases.map(ph=><span key={ph.id}>{ph.name} terminaba el {fd(ph.end)}</span>)}{delay.late.length>0&&<button type="button" className="text-btn" onClick={()=>setLateOnly(!lateOnly)}>{lateOnly?'Ver todas las tareas':`${delay.late.length} ${delay.late.length===1?'tarea vencida':'tareas vencidas'}`}</button>}</>:<strong>Al día</strong>}</div></div>
   <div className="pj-toolbar"><div className="pj-chips" role="group" aria-label="Filtrar por fase"><button className="pj-chip" aria-pressed={phase==='all'} onClick={()=>setPhase('all')}>Todas las fases</button>{(mon?phases.slice(-6):phases).map(ph=><button key={ph.id} className="pj-chip" aria-pressed={phase===ph.id} onClick={()=>setPhase(ph.id)}>{ph.name}</button>)}</div>{edit&&<button className="primary" onClick={()=>setOpen({phase_id:phase!=='all'?phase:phases[cur]?.id,column_key:'todo',visible:true})}><Plus size={16}/>Nueva tarea</button>}</div>

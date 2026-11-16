@@ -71,7 +71,7 @@ export async function projectAction(c:Ctx,b:any):Promise<Response|null>{
   const p=await db.prepare('SELECT id,name FROM projects WHERE id=?').bind(str(b.id,100)).first<any>();if(!p)return fail('Proyecto no encontrado.',404);
   if(b.confirmName!==p.name)return fail('Escribe el nombre exacto del proyecto para eliminarlo.');
   const inTasks='task_id IN (SELECT id FROM project_tasks WHERE project_id=?)';
-  await db.batch([db.prepare(`DELETE FROM project_reviews WHERE ${inTasks}`).bind(p.id),db.prepare(`DELETE FROM project_comments WHERE ${inTasks}`).bind(p.id),db.prepare('DELETE FROM project_note_views WHERE note_id IN (SELECT id FROM project_notes WHERE project_id=?)').bind(p.id),db.prepare('DELETE FROM project_notes WHERE project_id=?').bind(p.id),db.prepare("DELETE FROM week_plan WHERE kind='task' AND ref_id IN (SELECT id FROM project_tasks WHERE project_id=?)").bind(p.id),db.prepare('DELETE FROM project_tasks WHERE project_id=?').bind(p.id),db.prepare('DELETE FROM projects WHERE id=?').bind(p.id)]);
+  await db.batch([db.prepare(`DELETE FROM project_reviews WHERE ${inTasks}`).bind(p.id),db.prepare(`DELETE FROM project_comments WHERE ${inTasks}`).bind(p.id),db.prepare('DELETE FROM project_note_views WHERE note_id IN (SELECT id FROM project_notes WHERE project_id=?)').bind(p.id),db.prepare('DELETE FROM project_notes WHERE project_id=?').bind(p.id),db.prepare("DELETE FROM week_plan WHERE kind='task' AND ref_id IN (SELECT id FROM project_tasks WHERE project_id=?)").bind(p.id),db.prepare("DELETE FROM week_hidden WHERE kind='task' AND ref_id IN (SELECT id FROM project_tasks WHERE project_id=?)").bind(p.id),db.prepare('DELETE FROM project_tasks WHERE project_id=?').bind(p.id),db.prepare('DELETE FROM projects WHERE id=?').bind(p.id)]);
   return null;
  }
  const task=b.id?await db.prepare('SELECT t.*,p.client_id,p.phases,p.options FROM project_tasks t JOIN projects p ON p.id=t.project_id WHERE t.id=?').bind(str(b.id,100)).first<any>():null;
@@ -106,7 +106,7 @@ export async function projectAction(c:Ctx,b:any):Promise<Response|null>{
  }
  if(b.action==='deleteTask'){
   if(!staff)return fail('Solo el equipo puede eliminar tareas.',403);
-  await db.batch([db.prepare('DELETE FROM project_reviews WHERE task_id=?').bind(task.id),db.prepare('DELETE FROM project_comments WHERE task_id=?').bind(task.id),db.prepare("DELETE FROM week_plan WHERE kind='task' AND ref_id=?").bind(task.id),db.prepare('DELETE FROM project_tasks WHERE id=?').bind(task.id)]);
+  await db.batch([db.prepare('DELETE FROM project_reviews WHERE task_id=?').bind(task.id),db.prepare('DELETE FROM project_comments WHERE task_id=?').bind(task.id),db.prepare("DELETE FROM week_plan WHERE kind='task' AND ref_id=?").bind(task.id),db.prepare("DELETE FROM week_hidden WHERE kind='task' AND ref_id=?").bind(task.id),db.prepare('DELETE FROM project_tasks WHERE id=?').bind(task.id)]);
   return null;
  }
  const role=staff||c.preview?'team':c.role;
