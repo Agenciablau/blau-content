@@ -22,7 +22,7 @@ export default function MyWeek({data,busy,mutate,onOpenTask,onOpenPost,clientId}
  const doneRefs=useMemo(()=>new Set<string>((data.weekPlan??[]).filter((c:any)=>c.kind==='post'&&c.done).map((c:any)=>c.ref_id)),[data.weekPlan]);
  const hiddenSet=useMemo(()=>new Set<string>((data.weekHidden??[]).map((h:any)=>h.kind+':'+h.ref_id)),[data.weekHidden]),isHidden=(kind:string,id:string)=>hiddenSet.has(kind+':'+id);
  const brand=clientId||'all',inBrand=(clientId:string)=>brand==='all'||clientId===brand;
- const open=tasks.filter(t=>t.column_key!=='done'&&prj(t.project_id)&&prj(t.project_id).status!=='paused'&&prj(t.project_id).status!=='done'&&inBrand(prj(t.project_id).client_id)&&!placed.has('task:'+t.id)&&!isHidden('task',t.id));
+ const open=tasks.filter(t=>t.column_key!=='done'&&!t.client_task&&prj(t.project_id)&&prj(t.project_id).status!=='paused'&&prj(t.project_id).status!=='done'&&inBrand(prj(t.project_id).client_id)&&!placed.has('task:'+t.id)&&!isHidden('task',t.id));
  const weekEnd=dayOf(week,6),seen=new Set<string>();
  const take=(list:any[],mk:(x:any)=>Item|null)=>list.map(mk).filter((i):i is Item=>!!i&&!seen.has(i.key)&&!!seen.add(i.key));
  const groups:[string,Item[]][]=[
