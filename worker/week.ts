@@ -45,7 +45,7 @@ export async function weekAction(c:Ctx,b:any):Promise<Response|null>{
  }
  const card=b.id?await db.prepare('SELECT * FROM week_plan WHERE id=?').bind(str(b.id,100)).first<any>():null;
  if(b.action==='weekUnplace'){if(!card)return fail('Tarjeta no encontrada.',404);await db.prepare('DELETE FROM week_plan WHERE id=?').bind(card.id).run();return null;}
- if(b.action==='weekDone'){if(!card||card.kind!=='free')return fail('Solo las tarjetas libres se marcan aquí.',404);await db.prepare('UPDATE week_plan SET done=?,updated_at=? WHERE id=?').bind(b.done===true?1:0,now,card.id).run();return null;}
+ if(b.action==='weekDone'){if(!card||card.kind==='task')return fail('Las tareas se terminan desde su proyecto.',404);await db.prepare('UPDATE week_plan SET done=?,updated_at=? WHERE id=?').bind(b.done===true?1:0,now,card.id).run();return null;}
  if(b.action==='weekFlag'){if(!card)return fail('Tarjeta no encontrada.',404);await db.prepare('UPDATE week_plan SET priority=?,updated_at=? WHERE id=?').bind(b.priority===true?1:0,now,card.id).run();return null;}
  // weekPlace: coloca (o mueve) una tarea, una publicación o una tarjeta libre en un día de la semana.
  if(!isDay(b.day))return fail('Elige un día de lunes a viernes.');
