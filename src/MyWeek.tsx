@@ -29,7 +29,8 @@ export default function MyWeek({data,busy,mutate,onOpenTask,onOpenPost,clientId}
   ['Publicaciones por preparar',take(posts.filter(p=>['Borrador','Cambios solicitados'].includes(p.status)&&inBrand(p.client_id)&&!placed.has('post:'+p.id)&&!isHidden('post',p.id)),postItem)],
   ['Tareas con fecha esta semana',take(open.filter(t=>t.due&&t.due>=week&&t.due<=weekEnd),taskItem)],
   ['Mes en curso de proyectos mensuales',take(open.filter(t=>{const p=prj(t.project_id);return p.cadence==='monthly'&&t.phase_id==='m-'+now.slice(0,7);}),taskItem)],
-  ['En curso',take(open.filter(t=>t.column_key==='doing'||t.column_key==='review'),taskItem)]
+  ['En curso',take(open.filter(t=>t.column_key==='doing'||t.column_key==='review'),taskItem)],
+  ['Otras tareas por hacer',take(open,taskItem)]
  ].filter(g=>g[1].length) as [string,Item[]][];
  const hiddenItems=(data.weekHidden??[]).map((h:any)=>h.kind==='task'?(()=>{const t=tasks.find(x=>x.id===h.ref_id);return t?taskItem(t):null;})():(()=>{const p=posts.find(x=>x.id===h.ref_id);return p?postItem(p):null;})()).filter((i:Item|null):i is Item=>!!i);
  const itemOf=(c:any):Item|null=>{if(c.kind==='free')return {key:'f'+c.id,kind:'free',ref:c.id,title:c.title,color:'#9aa5ab',brand:'',sub:'Tarjeta libre',tag:'',tone:'',late:false,done:!!c.done};if(c.kind==='task'){const t=tasks.find(x=>x.id===c.ref_id);return t?taskItem(t):null;}const p=posts.find(x=>x.id===c.ref_id);return p?postItem(p):null;};
