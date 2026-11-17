@@ -726,3 +726,10 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .app-shell .post-body strong{font-size:12.5px;font-weight:700;margin:0 0 6px}
 .app-shell .post-body .post-bottom{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--blau-muted);margin-bottom:7px}.app-shell .post-body .post-bottom svg{width:13px;height:13px;flex:none}
 .post-foot{display:block;border-top:1px solid #e8edf2;padding-top:5px;font-size:11px;font-weight:500;color:var(--blau-muted)}.post-foot i{display:none}
+/* Detalles de la referencia: cabeceras suaves en Cambios y Publicado, Idea amarilla sin imagen, iconos redondos de red, menú ⋮ */
+.state-changes{--status-solid:#ffc4b5;--status-on:#b02a0b}.state-published{--status-solid:#dde3ea;--status-on:#0b2a5b}
+.app-shell .post-card.state-published{background:#fff}
+.app-shell .post-card.no-img.state-idea{background:#fff1b8;border-color:#ffe680}.app-shell .post-card.no-img .post-body strong{margin-bottom:8px}
+.post-net{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#0b2a5b;color:#fff;flex:none}.post-net svg{width:11px!important;height:11px!important}
+.post-net.net-instagram{background:linear-gradient(45deg,#ffc800,#ff5a36,#8a2bff)}.post-net.net-linkedin{background:#0a66c2}.post-net.net-facebook{background:#1877f2}
+.post-foot{display:flex;justify-content:space-between;align-items:center}.post-foot b{color:#9aa8b8;font-weight:800;letter-spacing:0}
