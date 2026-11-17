@@ -733,3 +733,5 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .post-net{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#0b2a5b;color:#fff;flex:none}.post-net svg{width:11px!important;height:11px!important}
 .post-net.net-instagram{background:linear-gradient(45deg,#ffc800,#ff5a36,#8a2bff)}.post-net.net-linkedin{background:#0a66c2}.post-net.net-facebook{background:#1877f2}
 .post-foot{display:flex;justify-content:space-between;align-items:center}.post-foot b{color:#9aa8b8;font-weight:800;letter-spacing:0}
+.app-shell .post-body .post-bottom{flex-direction:row;justify-content:flex-start}
+.post-head span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
