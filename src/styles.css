@@ -758,3 +758,11 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .app-shell .agenda-post .post-head{font-size:12px;padding:6px 11px}.app-shell .agenda-post .post-body{padding:10px}.app-shell .agenda-post .post-body strong{font-size:14px}
 .app-shell .agenda-post .post-body .post-bottom,.app-shell .agenda-post .post-foot{font-size:12px}
 .app-shell .agenda-post .post-body .post-bottom{align-self:start;margin-top:8px}
+/* Mi semana: misma ficha que el calendario (cabecera de color por estado, texto oscuro, letra fina) */
+.state-todo{--status-solid:#e3e8ee;--status-on:#334155;--status-line:#e3e8ee}
+.wk-card{padding:0;overflow:hidden;gap:0;border:1px solid #e3e8ee;border-left-width:1px;border-radius:11px;box-shadow:0 1px 3px #0b2a5b14}
+.wk-card.post{border-style:solid}
+.wk-head{display:block;padding:4px 9px;background:var(--status-solid);color:var(--status-on);font-size:11px;font-weight:600}
+.wk-card>.wk-title,.wk-card>.wk-meta,.wk-card>.wk-tags,.wk-card>.wk-actions{margin-left:9px;margin-right:9px}
+.wk-card>.wk-title{margin-top:7px;margin-bottom:3px;font-weight:600}.wk-card>.wk-meta{margin-bottom:5px}.wk-card>.wk-actions{margin-bottom:7px}
+.wk-card>.wk-tags:not(:empty){margin-bottom:5px}.wk-meta b{font-weight:500}
