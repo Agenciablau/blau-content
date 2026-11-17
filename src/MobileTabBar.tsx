@@ -1,12 +1,16 @@
 import {useEffect,useRef,useState} from 'react';
-import {LayoutDashboard,CalendarDays,CheckCheck,CalendarRange,Ellipsis} from 'lucide-react';
+import {LayoutDashboard,CalendarDays,CheckCheck,CalendarRange,Ellipsis,LayoutGrid,NotebookPen,UserRound,Layers} from 'lucide-react';
 export type Tab={name:string;label:string;icon:any;count?:number};
 export function tabsFor(social:boolean,week:boolean,pending:number):Tab[]{
  if(!social)return [];
  return [{name:'Resumen',label:'Resumen',icon:LayoutDashboard},{name:'Calendario',label:'Calendario',icon:CalendarDays},{name:'Aprobaciones',label:'Aprobar',icon:CheckCheck,count:pending},...(week?[{name:'Mi semana',label:'Mi semana',icon:CalendarRange}]:[])];
 }
+// Nivel «Proyectos»: Inicio, las vistas del proyecto abierto y Más.
+export function projectTabs(opts:{social:boolean;board:boolean;notes:boolean}):Tab[]{
+ return [...(opts.social?[{name:'home',label:'Inicio',icon:LayoutDashboard}]:[]),...(opts.board?[{name:'p:board',label:'Tablero',icon:LayoutGrid},...(opts.notes?[{name:'p:notes',label:'Notas',icon:NotebookPen}]:[]),{name:'p:client',label:'Cliente',icon:UserRound}]:[{name:'p:client',label:'Proyecto',icon:Layers}])];
+}
 // Barra inferior flotante solo en móvil (CSS). La última pestaña, «Más», abre el menú lateral.
-export default function MobileTabBar({tabs,view,more,onSelect,onMore}:{tabs:Tab[];view:string;more:boolean;onSelect:(name:string)=>void;onMore:()=>void}){
+export default function MobileTabBar({tabs,view,more,onSelect,onMore}:{tabs:Tab[];view:string|null;more:boolean;onSelect:(name:string)=>void;onMore:()=>void}){
  const all=[...tabs,{name:'__more',label:'Más',icon:Ellipsis} as Tab],ref=useRef<HTMLElement>(null),ind=useRef<HTMLDivElement>(null);
  const found=tabs.findIndex(t=>t.name===view),current=more||found<0?all.length-1:found;
  const [drag,setDrag]=useState<number|null>(null);
