@@ -758,3 +758,46 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .app-shell .agenda-post .post-head{font-size:12px;padding:6px 11px}.app-shell .agenda-post .post-body{padding:10px}.app-shell .agenda-post .post-body strong{font-size:14px}
 .app-shell .agenda-post .post-body .post-bottom,.app-shell .agenda-post .post-foot{font-size:12px}
 .app-shell .agenda-post .post-body .post-bottom{align-self:start;margin-top:8px}
+/* Mi semana: misma ficha que el calendario (cabecera de color por estado, texto oscuro, letra fina) */
+.state-todo{--status-solid:#e3e8ee;--status-on:#334155;--status-line:#e3e8ee}
+.wk-card{padding:0;overflow:hidden;gap:0;border:1px solid #e3e8ee;border-left-width:1px;border-radius:11px;box-shadow:0 1px 3px #0b2a5b14}
+.wk-card.post{border-style:solid}
+.wk-head{display:block;padding:4px 9px;background:var(--status-solid);color:var(--status-on);font-size:11px;font-weight:600}
+.wk-card>.wk-title,.wk-card>.wk-meta,.wk-card>.wk-tags,.wk-card>.wk-actions{margin-left:9px;margin-right:9px}
+.wk-card>.wk-title{margin-top:7px;margin-bottom:3px;font-weight:600}.wk-card>.wk-meta{margin-bottom:5px}.wk-card>.wk-actions{margin-bottom:7px}
+.wk-card>.wk-tags:not(:empty){margin-bottom:5px}.wk-meta b{font-weight:500}
+/* Rediseño global: el cian es la marca y el resto de colores da significado */
+.page-heading h1,.modal-header h2,.drawer h1,.table-title h2,.section-title h2,.client-card h2,.review-card h2{color:#0b2a5b}
+.primary,.app-shell .primary{background:#12d6f5;color:#04303a;font-weight:600;box-shadow:0 3px 0 #06a9c4}.primary:hover,.app-shell .primary:hover{background:#3adff7;color:#04303a}.primary:active{box-shadow:0 1px 0 #06a9c4;transform:translateY(2px)}
+.app-shell .primary:disabled{box-shadow:none}
+.modal,.drawer{border-radius:20px}
+/* Barra lateral: icono de color por sección */
+.app-shell .sidebar nav button>svg:first-child{box-sizing:content-box;width:16px;height:16px;padding:5px;border-radius:9px;flex:none;background:#fff1b8;color:#6b5200}
+.app-shell .sidebar nav button:nth-child(5n+2)>svg:first-child{background:#f0fbc6;color:#4d6200}
+.app-shell .sidebar nav button:nth-child(5n+3)>svg:first-child{background:#eee3ff;color:#5a15b8}
+.app-shell .sidebar nav button:nth-child(5n+4)>svg:first-child{background:#ffe2da;color:#b02a0b}
+.app-shell .sidebar nav button:nth-child(5n+5)>svg:first-child{background:#d3f7e4;color:#0a6b3b}
+.app-shell .sidebar nav button.active>svg:first-child{background:#12d6f5;color:#04303a}
+.app-shell .sidebar nav button.nav-project>svg,.app-shell .sidebar nav button.nav-add>svg{background:none;padding:0;width:16px;height:16px}
+/* Tarjetas de resumen en color suave */
+.app-shell .stats>div:nth-child(1){background:#ddf8fd}.app-shell .stats>div:nth-child(2){background:#eee3ff}.app-shell .stats>div:nth-child(3){background:#d3f7e4}.app-shell .stats>div:nth-child(4){background:#ffe2da}
+.app-shell .stats>div{border-color:transparent}
+.app-shell .stats>div:nth-child(1) small,.app-shell .stats>div:nth-child(1) strong{color:#045a6b}.app-shell .stats>div:nth-child(2) small,.app-shell .stats>div:nth-child(2) strong{color:#5a15b8}.app-shell .stats>div:nth-child(3) small,.app-shell .stats>div:nth-child(3) strong{color:#0a6b3b}.app-shell .stats>div:nth-child(4) small,.app-shell .stats>div:nth-child(4) strong{color:#b02a0b}
+.app-shell .stats strong{font-weight:600}
+.stat-icon.lavender{background:#eee3ff;color:#5a15b8}.stat-icon.yellow{background:#fff1b8;color:#6b5200}.stat-icon.mint{background:#d3f7e4;color:#0a6b3b}.stat-icon.blush{background:#ffe2da;color:#b02a0b}
+/* Tablero de proyectos y vistas del cliente */
+.pj-card{border-radius:12px;border-color:#e3e8ee;box-shadow:0 1px 3px #0b2a5b14}
+.app-shell .sidebar nav button.nav-add>svg,.app-shell .sidebar nav button.nav-project>svg{background:none!important;padding:0!important;color:inherit!important}
+.post-thumb em{line-height:1.15;word-break:break-word}
+/* Resumen, compromisos y tablero de proyecto: fichas de color suave */
+.app-shell .kpi{border-color:transparent;background:#ddf8fd}.app-shell .kpi span,.app-shell .kpi b,.app-shell .kpi small{color:#045a6b}
+.app-shell .kpi-review{background:#eee3ff}.app-shell .kpi-review span,.app-shell .kpi-review b,.app-shell .kpi-review small{color:#5a15b8}
+.app-shell .kpi-changes{background:#ffe2da}.app-shell .kpi-changes span,.app-shell .kpi-changes b,.app-shell .kpi-changes small{color:#b02a0b}
+.app-shell .kpi-comments{background:#d3f7e4}.app-shell .kpi-comments span,.app-shell .kpi-comments b,.app-shell .kpi-comments small{color:#0a6b3b}
+.app-shell .kpi b{font-weight:600}
+.app-shell .goal-card{border-color:transparent}.app-shell .goal-card:nth-child(4n+1){background:#ddf8fd}.app-shell .goal-card:nth-child(4n+2){background:#eee3ff}.app-shell .goal-card:nth-child(4n+3){background:#fff1b8}.app-shell .goal-card:nth-child(4n+4){background:#d3f7e4}
+.app-shell .goal-card:nth-child(4n+1) *{color:#045a6b}.app-shell .goal-card:nth-child(4n+2) *{color:#5a15b8}.app-shell .goal-card:nth-child(4n+3) *{color:#6b5200}.app-shell .goal-card:nth-child(4n+4) *{color:#0a6b3b}
+.app-shell .goal-card progress{background:#ffffffb3}
+.pj-tile{border-color:transparent}.pj-summary .pj-tile:nth-child(1),.pj-status-top+*+*{}
+.pj-tile:nth-child(1){background:#ddf8fd}.pj-tile:nth-child(2){background:#d3f7e4}.pj-tile:nth-child(3){background:#fff1b8}.pj-tile:nth-child(4){background:#f0fbc6}
+.pj-tile:nth-child(3) small,.pj-tile:nth-child(3) strong{color:#6b5200}.pj-tile:nth-child(4) small{color:#4d6200}
