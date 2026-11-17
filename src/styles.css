@@ -735,3 +735,4 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .post-foot{display:flex;justify-content:space-between;align-items:center}.post-foot b{color:#9aa8b8;font-weight:800;letter-spacing:0}
 .app-shell .post-body .post-bottom{flex-direction:row;justify-content:flex-start}
 .post-head span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.post-net,.post-net.net-instagram,.post-net.net-linkedin,.post-net.net-facebook{background:none;color:var(--blau-muted);width:auto;height:auto;border-radius:0}.post-net svg{width:13px!important;height:13px!important}
