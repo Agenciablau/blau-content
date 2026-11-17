@@ -740,3 +740,13 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .state-review{--status-solid:#c9a0ff;--status-on:#3b0a7a}
 .app-shell .post-card.no-img.state-idea .post-body strong,.app-shell .post-card.no-img.state-idea .post-body .post-bottom,.app-shell .post-card.no-img.state-idea .post-net,.app-shell .post-card.no-img.state-idea .post-foot,.app-shell .post-card.no-img.state-idea .post-foot b{color:#6b5200}
 .app-shell .post-card.no-img.state-idea .post-foot{border-top-color:#f0d98a}
+/* Ficha horizontal: imagen en el primer tercio, el resto de la información en los otros dos */
+.post-head b{color:var(--status-on);opacity:.6;margin-left:auto;padding-left:6px;font-weight:800}
+.post-head{gap:0}.post-head span:nth-child(2){margin-left:auto}.post-head span:nth-child(2)+b{margin-left:6px}
+.app-shell .post-body{display:grid;grid-template-columns:1fr 2fr;column-gap:8px;align-items:start;padding:7px}
+.app-shell .post-body .post-thumb{grid-column:1;grid-row:1/3;margin:0}
+.app-shell .post-body strong{grid-column:2;grid-row:1;margin:0 0 4px;font-size:12px}
+.app-shell .post-body .post-bottom{grid-column:2;grid-row:2;margin:0;align-self:end}
+.app-shell .post-body .post-foot{grid-column:1/-1;grid-row:3;margin-top:7px;display:block}
+.post-thumb em{font-size:9px;padding:2px}
+.app-shell .post-card.no-img .post-body{display:block}.app-shell .post-card.no-img .post-body strong{margin-bottom:6px}.app-shell .post-card.no-img .post-body .post-bottom{margin-bottom:7px}.app-shell .post-card.no-img .post-body .post-foot{margin-top:0}
