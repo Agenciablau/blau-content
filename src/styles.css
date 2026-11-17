@@ -750,3 +750,7 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .app-shell .post-body .post-foot{grid-column:1/-1;grid-row:3;margin-top:7px;display:block}
 .post-thumb em{font-size:9px;padding:2px}
 .app-shell .post-card.no-img .post-body{display:block}.app-shell .post-card.no-img .post-body strong{margin-bottom:6px}.app-shell .post-card.no-img .post-body .post-bottom{margin-bottom:7px}.app-shell .post-card.no-img .post-body .post-foot{margin-top:0}
+/* Tipografía de las fichas más fina */
+.post-head{font-weight:600}.post-head b{font-weight:600}
+.app-shell .post-body strong{font-weight:600}
+.app-shell .post-body .post-foot,.app-shell .post-body .post-bottom span{font-weight:400}
