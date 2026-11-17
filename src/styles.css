@@ -710,7 +710,6 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .app-shell .agenda-card[class*="state-"]{background:color-mix(in srgb,var(--status-surface) 38%,#fff);border-color:var(--status-line)}
 .pj-col:nth-child(1){background:#eef2f8}.pj-col:nth-child(2){background:#e7f8fd}.pj-col:nth-child(3){background:#fff6d1}.pj-col:nth-child(4){background:#f1e8ff}.pj-col:nth-child(5){background:#ddf8ea}
 .pj-col:nth-child(2) h3{color:#045a6b}.pj-col:nth-child(4) h3{color:#5a15b8}.pj-col:nth-child(5) h3{color:#0a6b3b}
-@media(max-width:979px){.post-thumb{display:none}}
 /* Tarjeta de calendario: cabecera de color con el estado, imagen, título y pie */
 .state-idea{--status-solid:#ffc800;--status-on:#3d2e00}.state-draft{--status-solid:#cff03c;--status-on:#3a4a00}.state-review{--status-solid:#8a2bff;--status-on:#fff}.state-changes{--status-solid:#ff5a36;--status-on:#fff}.state-approved{--status-solid:#2fd985;--status-on:#04361c}.state-planned{--status-solid:#12d6f5;--status-on:#04303a}.state-published{--status-solid:#0b2a5b;--status-on:#fff}
 .app-shell .post-card[class*="state-"]{padding:0;overflow:hidden;background:#fff;border:1px solid var(--status-line);border-left-width:1px;border-radius:12px;text-align:left;box-shadow:0 1px 0 #0b2a5b0d}
@@ -754,3 +753,8 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .post-head{font-weight:600}.post-head b{font-weight:600}
 .app-shell .post-body strong{font-weight:600}
 .app-shell .post-body .post-foot,.app-shell .post-body .post-bottom span{font-weight:400}
+/* Agenda móvil: misma ficha que en escritorio */
+.agenda-post{display:block;width:100%;margin:0 0 10px;font:inherit}.agenda-post.post-card[class*="state-"]{margin-bottom:10px}
+.app-shell .agenda-post .post-head{font-size:12px;padding:6px 11px}.app-shell .agenda-post .post-body{padding:10px}.app-shell .agenda-post .post-body strong{font-size:14px}
+.app-shell .agenda-post .post-body .post-bottom,.app-shell .agenda-post .post-foot{font-size:12px}
+.app-shell .agenda-post .post-body .post-bottom{align-self:start;margin-top:8px}
