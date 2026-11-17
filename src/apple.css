@@ -163,3 +163,11 @@ html body .modal-overlay>.modal,html body .drawer-overlay>.drawer{border-radius:
 }
 html body .app-shell .sidebar nav button.active{background:rgba(19,219,251,.16);color:#003680}
 html body .app-shell .day.today .day-header>span:first-child{color:#003680!important}
+/* Pestañas con indicador deslizante (misma animación que la barra inferior del móvil) */
+html body .app-shell :is(.segmented,.pj-tabs){position:relative;isolation:isolate;background:var(--ap-fill);border:0;border-radius:10px}
+html body .app-shell :is(.segmented,.pj-tabs)>button{position:relative;z-index:1;background:transparent!important;box-shadow:none!important;transition:color .25s}
+html body .app-shell .pj-tabs>button{color:var(--ap-2)}
+html body .app-shell .pj-tabs>button[aria-selected="true"]{color:var(--ap-tint);font-weight:600}
+html body .app-shell .seg-ind{position:absolute;top:0;left:0;z-index:0;border-radius:8px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04);transition:transform .5s cubic-bezier(.34,1.56,.64,1),width .5s cubic-bezier(.34,1.56,.64,1),opacity .2s;pointer-events:none}
+html body .app-shell .seg-ind.go{animation:tab-stretch .5s ease}
+@media(prefers-reduced-motion:reduce){html body .app-shell .seg-ind{transition:none}html body .app-shell .seg-ind.go{animation:none}}
