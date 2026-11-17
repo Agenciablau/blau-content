@@ -1,5 +1,5 @@
 /* Capa visual estilo Apple: tipografía del sistema, grises neutros, superficies blancas, sombras suaves y color solo como acento. */
-:root{--ap-bg:#f5f5f7;--ap-card:#fff;--ap-text:#1d1d1f;--ap-2:#6e6e73;--ap-3:#86868b;--ap-sep:rgba(60,60,67,.12);--ap-fill:rgba(118,118,128,.12);--ap-fill2:rgba(118,118,128,.08);--ap-tint:#0a9fc0;--ap-cyan:#13dbfb;--ap-shadow:0 1px 2px rgba(0,0,0,.04),0 2px 10px rgba(0,0,0,.04);--ap-shadow-lg:0 12px 40px rgba(0,0,0,.12),0 2px 8px rgba(0,0,0,.06);--ap-font:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',Inter,system-ui,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;--blau-ink:var(--ap-text);--blau-text:var(--ap-text);--blau-muted:var(--ap-2);--blau-line:var(--ap-sep);--blau-navy:var(--ap-tint);--blau-soft:rgba(19,219,251,.14)}
+:root{--ap-bg:#f5f5f7;--ap-card:#fff;--ap-text:#1d1d1f;--ap-2:#6e6e73;--ap-3:#86868b;--ap-sep:rgba(60,60,67,.12);--ap-fill:rgba(118,118,128,.12);--ap-fill2:rgba(118,118,128,.08);--ap-tint:#003680;--ap-cyan:#13dbfb;--ap-shadow:0 1px 2px rgba(0,0,0,.04),0 2px 10px rgba(0,0,0,.04);--ap-shadow-lg:0 12px 40px rgba(0,0,0,.12),0 2px 8px rgba(0,0,0,.06);--ap-font:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',Inter,system-ui,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;--blau-ink:var(--ap-text);--blau-text:var(--ap-text);--blau-muted:var(--ap-2);--blau-line:var(--ap-sep);--blau-navy:var(--ap-tint);--blau-soft:rgba(19,219,251,.14)}
 html body{background:var(--ap-bg);color:var(--ap-text);font-family:var(--ap-font);letter-spacing:-.01em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 html body .app-shell,html body .app-shell .main,html body .app-shell .content{background:var(--ap-bg)}
 html body .app-shell :where(h1,h2,h3,strong,b){color:var(--ap-text)}
@@ -37,18 +37,18 @@ html body .app-shell .page-heading h1{font-size:34px;font-weight:700;letter-spac
 html body .app-shell .page-heading p{color:var(--ap-2)}
 
 /* Botones */
-html body .primary,html body .app-shell .primary{background:var(--ap-tint);color:#fff;border-radius:980px;padding:9px 18px;font-weight:600;box-shadow:none}
-html body .primary:hover,html body .app-shell .primary:hover{background:#088eac;color:#fff}
+html body .primary,html body .app-shell .primary{background:var(--ap-cyan);color:#003680;border-radius:980px;padding:9px 18px;font-weight:600;box-shadow:none}
+html body .primary:hover,html body .app-shell .primary:hover{background:#3fe3fc;color:#003680}
 html body .primary:active,html body .app-shell .primary:active{box-shadow:none;transform:scale(.98)}
-html body .primary svg{color:#fff}
+html body .primary svg{color:#003680}
 html body .secondary-btn{background:var(--ap-fill);border:0;border-radius:980px;color:var(--ap-tint);font-weight:600}
 html body .secondary-btn:hover{background:rgba(118,118,128,.18)}
 html body .text-btn{color:var(--ap-tint)}
-html body button:focus-visible,html body a:focus-visible{outline:3px solid rgba(10,159,192,.45);outline-offset:2px}
+html body button:focus-visible,html body a:focus-visible{outline:3px solid rgba(19,219,251,.6);outline-offset:2px}
 
 /* Campos */
 html body input,html body textarea,html body select{border:1px solid rgba(60,60,67,.18);border-radius:10px;background:#fff;color:var(--ap-text)}
-html body input:focus,html body textarea:focus,html body select:focus{outline:0;border-color:var(--ap-tint);box-shadow:0 0 0 3px rgba(10,159,192,.2)}
+html body input:focus,html body textarea:focus,html body select:focus{outline:0;border-color:var(--ap-cyan);box-shadow:0 0 0 3px rgba(19,219,251,.3)}
 html body label{font-weight:500;color:var(--ap-text)}
 
 /* Tarjetas genéricas: blanco, sin borde, sombra suave */
@@ -56,7 +56,7 @@ html body .app-shell :is(.calendar-panel,.table-panel,.panel,.client-card,.revie
 
 /* Resumen: tarjetas blancas con el color solo en el título */
 html body .app-shell .kpi{background:var(--ap-card)!important;padding:16px 18px;gap:4px}
-html body .app-shell .kpi span{font-size:13px;font-weight:600;color:var(--ap-tint)!important}
+html body .app-shell .kpi span{font-size:13px;font-weight:600;color:#003680!important}
 html body .app-shell .kpi b{font-size:30px;font-weight:700;letter-spacing:-.02em;color:var(--ap-text)!important}
 html body .app-shell .kpi small{font-size:12px;font-weight:500;color:var(--ap-3)!important}
 html body .app-shell .kpi-review span{color:#8433b0!important}
@@ -78,7 +78,7 @@ html body .app-shell .channel-chips button{border:0;background:var(--ap-fill);co
 html body .app-shell .channel-chips button.on{background:var(--ap-text);color:#fff}
 html body .app-shell .filters select.state-pill{border:1px solid rgba(60,60,67,.18);border-radius:10px}
 html body .app-shell .key-toggle{border:0;background:var(--ap-fill);color:var(--ap-text);border-radius:980px}
-html body .app-shell .key-toggle.on{background:rgba(19,219,251,.18);color:#066d84}
+html body .app-shell .key-toggle.on{background:rgba(19,219,251,.18);color:#003680}
 html body .app-shell .key-add{border:0;background:none;color:var(--ap-tint)}
 
 /* Calendario */
@@ -154,10 +154,12 @@ html body .app-shell .day.today .day-header>span:first-child{width:28px!importan
 html body .app-shell .mobile-filter-toggle{border:0;border-radius:14px;background:#fff;box-shadow:var(--ap-shadow);color:var(--ap-text)}
 html body .app-shell .mobile-filter-toggle svg{color:var(--ap-3)}
 html body .tab-bar{background:rgba(250,250,252,.72);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 8px 30px rgba(0,0,0,.12)}
-html body .tab-ind{background:rgba(118,118,128,.12);box-shadow:none}
+html body .tab-ind{background:rgba(19,219,251,.2);box-shadow:none}
 html body .tab-item{color:#8e8e93;font-weight:500;font-size:10px}
 html body .tab-item.on{color:var(--ap-tint);font-weight:600}
 html body .tab-item.on .tab-icon{transform:none}
-html body .mobile-fab{background:var(--ap-tint);color:#fff;box-shadow:0 6px 20px rgba(10,159,192,.35)}
+html body .mobile-fab{background:var(--ap-cyan);color:#003680;box-shadow:0 6px 20px rgba(19,219,251,.45)}
 html body .modal-overlay>.modal,html body .drawer-overlay>.drawer{border-radius:20px 20px 0 0}
 }
+html body .app-shell .sidebar nav button.active{background:rgba(19,219,251,.16);color:#003680}
+html body .app-shell .day.today .day-header>span:first-child{color:#003680!important}
