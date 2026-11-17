@@ -203,3 +203,11 @@ html body .app-shell .sidebar .client-picker-toggle,html body .app-shell .sideba
 @keyframes splash-in{from{opacity:0;transform:translateY(6px)}}
 @keyframes splash-logo{from{opacity:0;transform:scale(.92);filter:blur(6px)}}
 @media(prefers-reduced-motion:reduce){.splash,.splash-word,.splash-logo{animation:none;transition:opacity .2s}.splash.leave{transform:none;opacity:0}}
+/* Hoy: recuadro azul claro. Día seleccionado en el móvil: número en círculo azul marino */
+html body .app-shell .day{position:relative}
+html body .app-shell .day>*{position:relative;z-index:1}
+html body .app-shell .day.today::before{content:'';position:absolute;inset:4px;border-radius:12px;background:#dcf6fd;box-shadow:inset 0 0 0 1px rgba(19,219,251,.35);z-index:0;pointer-events:none}
+html body .app-shell .day.today .day-header>span:first-child{background:transparent!important;color:#003680!important;font-weight:700}
+@media(max-width:979px){
+html body .app-shell .day.sel .day-header>span:first-child{display:inline-flex;align-items:center;justify-content:center;width:30px!important;height:30px!important;min-width:0!important;padding:0!important;flex:none;border-radius:50%!important;background:#003680!important;color:#fff!important;font-weight:700;transition:background .2s}
+}
