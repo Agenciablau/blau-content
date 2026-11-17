@@ -688,3 +688,4 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 @media(max-width:360px){.agenda-thumb{width:76px;height:76px}}
 @media(max-width:979px){.day-agenda>.secondary-btn{margin-right:64px}}
 @media(max-width:979px){.app-shell .day.today{background:#13dbfb}.app-shell .day.today .day-dots i{box-shadow:0 0 0 1px #fff}.app-shell .day.today .day-header>span:first-child{background:transparent;color:var(--blau-ink);font-weight:700;width:auto;border-radius:0}}
+@media(max-width:979px){.pj-tabs{display:none}}
