@@ -13,6 +13,7 @@ import ClientPicker from './ClientPicker';
 import FormatFilter from './FormatFilter';
 import MobileTabBar,{tabsFor,projectTabs} from './MobileTabBar';
 import AgendaCard from './AgendaCard';
+import PostThumb from './PostThumb';
 import {readClientProfile,autoApproveLabel} from '../shared/client-profile';
 import BufferPublish from './BufferPublish';
 import {bufferStateLabels,sendsToBuffer} from '../shared/buffer-scheduling';
@@ -35,13 +36,13 @@ const stamp=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0
 const ago=(d:string)=>{const m=Math.round((Date.now()-new Date(d).getTime())/60000);return m<1?'Ahora':m<60?`Hace ${m} min`:m<1440?`Hace ${Math.round(m/60)} h`:m<2880?'Ayer':new Date(d).toLocaleDateString('es-ES',{day:'numeric',month:'short',timeZone:'Europe/Madrid'});};
 const fmt=(d:string)=>d?new Date(d).toLocaleDateString('es-ES',{day:'numeric',month:'short'}):'Sin fecha';
 const statePalette:Record<string,{className:string;color:string}>={
- 'Idea':{className:'state-idea',color:'#6D28D9'},
- 'Borrador':{className:'state-draft',color:'#475569'},
- 'En revisión':{className:'state-review',color:'#92400E'},
- 'Cambios solicitados':{className:'state-changes',color:'#9A3412'},
- 'Aprobado':{className:'state-approved',color:'#166534'},
- 'Planificado':{className:'state-planned',color:'#003680'},
- 'Publicado':{className:'state-published',color:'#115E59'}
+ 'Idea':{className:'state-idea',color:'#FFC800'},
+ 'Borrador':{className:'state-draft',color:'#B5D321'},
+ 'En revisión':{className:'state-review',color:'#8A2BFF'},
+ 'Cambios solicitados':{className:'state-changes',color:'#FF5A36'},
+ 'Aprobado':{className:'state-approved',color:'#2FD985'},
+ 'Planificado':{className:'state-planned',color:'#12D6F5'},
+ 'Publicado':{className:'state-published',color:'#0B2A5B'}
 };
 const statusClass=(s:string)=>(statePalette[s]??statePalette.Borrador).className;
 const statusColor=(s:string)=>(statePalette[s]??statePalette.Borrador).color;
@@ -125,7 +126,7 @@ export default function Planner(){
  }
  function postTable(list:any[]){return <div className="table-scroll"><table><thead><tr><th>Publicación</th><th>Cliente</th><th>Plataforma</th><th>Fecha</th><th>Estado</th><th/></tr></thead><tbody>{list.map(p=><tr key={p.id} onClick={()=>open(p)}><td><strong>{p.title}</strong><small>{p.format}</small></td><td><i className="client-dot" style={{background:client(p.client_id)?.color||statusColor(p.status)}}/>{client(p.client_id)?.name}</td><td>{p.channel}</td><td>{fmt(p.date)} · {p.date.slice(11)}</td><td><span className={'badge '+statusClass(p.status)}>{p.status}</span></td><td><button className="icon-btn" aria-label={`Abrir ${p.title}`}><ArrowUpRight size={17}/></button></td></tr>)}</tbody></table></div>;}
  async function dropPost(day:string,p:any=dragPost){setDragPost(null);setOverDay('');if(!canEdit||busy||!p||p.date?.slice(0,10)===day)return;await mutate({...p,action:'post',date:day+(p.date?p.date.slice(10):'T10:00')},`Publicación movida al ${fmt(day)}`);}
- function card(p:any){const cl=client(p.client_id);return <button key={p.id} className={'post-card'+(dragPost?.id===p.id?' dragging':'')} draggable={canEdit&&!busy} onDragStart={e=>{if(startDrag(e))setTimeout(()=>setDragPost(p),0);}} onDragEnd={()=>{setDragPost(null);setOverDay('');}} onTouchStart={e=>{if(canEdit&&!busy)touchDrag(e,{start:()=>setDragPost(p),over:setOverDay,drop:d=>dropPost(d,p),end:()=>{setDragPost(null);setOverDay('');}});}} style={{borderLeftColor:cl?.color||statusColor(p.status)}} onClick={()=>open(p)}><div className="post-top"><span className="post-brand">{cl?.name}</span><span>{p.date?p.date.slice(11):'Sin fecha'}</span></div><strong>{p.title}</strong><div className="post-bottom"><span>{p.channel} · {p.format}</span><span className={'calendar-state '+statusClass(p.status)}>{p.status}</span></div></button>;}
+ function card(p:any){const cl=client(p.client_id);return <button key={p.id} className={'post-card '+statusClass(p.status)+(dragPost?.id===p.id?' dragging':'')} draggable={canEdit&&!busy} onDragStart={e=>{if(startDrag(e))setTimeout(()=>setDragPost(p),0);}} onDragEnd={()=>{setDragPost(null);setOverDay('');}} onTouchStart={e=>{if(canEdit&&!busy)touchDrag(e,{start:()=>setDragPost(p),over:setOverDay,drop:d=>dropPost(d,p),end:()=>{setDragPost(null);setOverDay('');}});}} style={{borderLeftColor:cl?.color||statusColor(p.status)}} onClick={()=>open(p)}><PostThumb post={p}/><div className="post-top"><span className="post-brand">{cl?.name}</span><span>{p.date?p.date.slice(11):'Sin fecha'}</span></div><strong>{p.title}</strong><div className="post-bottom"><span>{p.channel} · {p.format}</span><span className={'calendar-state '+statusClass(p.status)}>{p.status}</span></div></button>;}
  function empty(title:string,desc:string){const filtered=channel!=='all'||query||dateFrom||dateTo||formatFilterActive||(!['Aprobaciones','Comentarios','Cambios'].includes(view)&&stateFilter!=='all');return <div className="empty"><div className="empty-icon"><CalendarDays size={28}/></div><h3>{title}</h3><p>{desc}</p>{filtered&&<button className="secondary-btn" onClick={()=>{setChannel('all');setStateFilter('all');setPublicationTypes([]);setQuery('');setDateFrom('');setDateTo('');}}>Limpiar filtros</button>}{canEdit&&!['Aprobaciones','Comentarios','Cambios'].includes(view)&&<button className="primary" onClick={()=>newPost()}><Plus size={16}/>Crear publicación</button>}</div>;}
  useEffect(()=>{setProjTab('board');},[projectId]);
  if(loading)return <div className="loading"><img className="loading-logo" src="/blau-content-logo.png" alt="Blau Content" width="978" height="727"/><h2>Abriendo tu espacio…</h2></div>;

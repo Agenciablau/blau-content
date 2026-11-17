@@ -698,3 +698,16 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .pj-mtabs{display:flex;gap:6px;overflow-x:auto;margin:0 -16px 10px;padding:0 16px}.pj-mtabs button{flex:none;border:1px solid var(--pj-line);background:#fff;border-radius:16px;padding:7px 12px;font-size:13px;color:inherit;white-space:nowrap}.pj-mtabs button[aria-selected=true]{background:#10243a;color:#fff;border-color:#10243a}.pj-mtabs b{margin-left:6px;font-weight:600;opacity:.7}
 .pj-board-wrap{overflow:visible;padding-bottom:96px}.pj-board{display:block;min-width:0}.pj-col{display:none}.pj-col.mon{display:block}
 }
+/* Rediseño color: el cian sigue siendo la marca; el resto de colores indica el estado */
+.state-idea{--status-ink:#6b5200;--status-surface:#fff1b8;--status-line:#ffe680}.state-draft{--status-ink:#4d6200;--status-surface:#f0fbc6;--status-line:#e2f58e}.state-review{--status-ink:#5a15b8;--status-surface:#eee3ff;--status-line:#d9c2ff}.state-changes{--status-ink:#b02a0b;--status-surface:#ffe2da;--status-line:#ffc4b5}.state-approved{--status-ink:#0a6b3b;--status-surface:#d3f7e4;--status-line:#a9ebc9}.state-planned{--status-ink:#045a6b;--status-surface:#ddf8fd;--status-line:#a6eaf7}.state-published{--status-ink:#fff;--status-surface:#0b2a5b;--status-line:#cbd5e4}
+.app-shell .badge[class*="state-"],.calendar-state{font-weight:700;border-radius:99px}
+.app-shell .nav-count{background:#ddf8fd;color:#045a6b;font-weight:800}.app-shell .nav-count.tone-review{background:#8a2bff;color:#fff}.app-shell .nav-count.tone-changes{background:#ff5a36;color:#fff}
+.sidebar nav button.active{background:#ddf8fd;color:#0b2a5b;font-weight:700}
+.app-shell .post-card[class*="state-"]{background:color-mix(in srgb,var(--status-surface) 38%,#fff);border-color:var(--status-line);border-left-width:3px;border-radius:12px}
+.app-shell .post-card.state-published{background:#eef2f8}.app-shell .post-card[class*="state-"]:hover{background:color-mix(in srgb,var(--status-surface) 70%,#fff)}
+.post-thumb{display:block;aspect-ratio:1;border-radius:9px;overflow:hidden;position:relative;margin:0 0 6px;background:#eef2f8}.post-thumb img{width:100%;height:100%;object-fit:cover;display:block}.post-thumb i{position:absolute;right:5px;bottom:5px;display:flex;gap:3px;align-items:center;background:#0008;color:#fff;font-size:10px;font-style:normal;border-radius:99px;padding:2px 6px}
+.post-thumb em{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:6px;font-size:11px;font-style:normal;color:var(--blau-muted)}
+.app-shell .agenda-card[class*="state-"]{background:color-mix(in srgb,var(--status-surface) 38%,#fff);border-color:var(--status-line)}
+.pj-col:nth-child(1){background:#eef2f8}.pj-col:nth-child(2){background:#e7f8fd}.pj-col:nth-child(3){background:#fff6d1}.pj-col:nth-child(4){background:#f1e8ff}.pj-col:nth-child(5){background:#ddf8ea}
+.pj-col:nth-child(2) h3{color:#045a6b}.pj-col:nth-child(4) h3{color:#5a15b8}.pj-col:nth-child(5) h3{color:#0a6b3b}
+@media(max-width:979px){.post-thumb{display:none}}
