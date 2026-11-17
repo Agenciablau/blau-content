@@ -1,0 +1,163 @@
+/* Capa visual estilo Apple: tipografía del sistema, grises neutros, superficies blancas, sombras suaves y color solo como acento. */
+:root{--ap-bg:#f5f5f7;--ap-card:#fff;--ap-text:#1d1d1f;--ap-2:#6e6e73;--ap-3:#86868b;--ap-sep:rgba(60,60,67,.12);--ap-fill:rgba(118,118,128,.12);--ap-fill2:rgba(118,118,128,.08);--ap-tint:#0a9fc0;--ap-cyan:#13dbfb;--ap-shadow:0 1px 2px rgba(0,0,0,.04),0 2px 10px rgba(0,0,0,.04);--ap-shadow-lg:0 12px 40px rgba(0,0,0,.12),0 2px 8px rgba(0,0,0,.06);--ap-font:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',Inter,system-ui,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;--blau-ink:var(--ap-text);--blau-text:var(--ap-text);--blau-muted:var(--ap-2);--blau-line:var(--ap-sep);--blau-navy:var(--ap-tint);--blau-soft:rgba(19,219,251,.14)}
+html body{background:var(--ap-bg);color:var(--ap-text);font-family:var(--ap-font);letter-spacing:-.01em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+html body .app-shell,html body .app-shell .main,html body .app-shell .content{background:var(--ap-bg)}
+html body .app-shell :where(h1,h2,h3,strong,b){color:var(--ap-text)}
+
+/* Estados: paleta del sistema */
+html body .state-idea{--st:#f5b800;--st-ink:#8a6400;--st-bg:rgba(255,204,0,.18)}
+html body .state-draft{--st:#9bc31c;--st-ink:#4f6a00;--st-bg:rgba(155,195,28,.18)}
+html body .state-review{--st:#af52de;--st-ink:#8433b0;--st-bg:rgba(175,82,222,.14)}
+html body .state-changes{--st:#ff6237;--st-ink:#c4370f;--st-bg:rgba(255,98,55,.14)}
+html body .state-approved{--st:#34c759;--st-ink:#1d7f38;--st-bg:rgba(52,199,89,.15)}
+html body .state-planned{--st:#13c4e6;--st-ink:#077f99;--st-bg:rgba(19,196,230,.15)}
+html body .state-published{--st:#8e8e93;--st-ink:#545458;--st-bg:rgba(142,142,147,.16)}
+html body .state-todo{--st:#8e8e93;--st-ink:#545458;--st-bg:rgba(142,142,147,.14)}
+
+/* Barra lateral: vidrio claro, filas redondeadas e iconos en tinte */
+html body .app-shell .sidebar{background:rgba(246,246,248,.82);-webkit-backdrop-filter:saturate(1.8) blur(20px);backdrop-filter:saturate(1.8) blur(20px);border-right:1px solid var(--ap-sep);padding:24px 14px 14px}
+html body .app-shell .sidebar .nav-label{font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ap-3);padding:0 10px;margin-bottom:4px}
+html body .app-shell .sidebar .nav-block+.nav-block{border-top:0;padding-top:6px}
+html body .app-shell .sidebar nav{gap:1px;margin-bottom:14px}
+html body .app-shell .sidebar nav button{min-height:32px;padding:0 10px;border-radius:8px;font-size:14px;font-weight:400;color:var(--ap-text)}
+html body .app-shell .sidebar nav button:hover{background:rgba(0,0,0,.04)}
+html body .app-shell .sidebar nav button.active{background:rgba(0,0,0,.07);color:var(--ap-text);font-weight:600}
+html body .app-shell .sidebar nav button>svg:first-child{display:inline-block!important;box-sizing:content-box;width:17px;height:17px;padding:0!important;background:none!important;color:var(--ap-tint)!important;stroke-width:1.8}
+html body .app-shell .sidebar nav button.nav-add{color:var(--ap-tint);font-weight:500}
+html body .app-shell .nav-count{min-width:20px;height:20px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:600;background:var(--ap-fill);color:var(--ap-2)}
+html body .app-shell .nav-count.tone-review{background:#af52de;color:#fff}
+html body .app-shell .nav-count.tone-changes{background:#ff6237;color:#fff}
+html body .app-shell .client-picker-toggle{border:0;border-radius:10px;background:var(--ap-card);box-shadow:var(--ap-shadow);font-weight:600}
+html body .app-shell .client-picker-label{font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ap-3)}
+html body .app-shell .sidebar-bottom{border-top:1px solid var(--ap-sep)}
+
+/* Cabecera de página: título grande */
+html body .app-shell .page-eyebrow{font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ap-3)}
+html body .app-shell .page-heading h1{font-size:34px;font-weight:700;letter-spacing:-.025em;color:var(--ap-text)}
+html body .app-shell .page-heading p{color:var(--ap-2)}
+
+/* Botones */
+html body .primary,html body .app-shell .primary{background:var(--ap-tint);color:#fff;border-radius:980px;padding:9px 18px;font-weight:600;box-shadow:none}
+html body .primary:hover,html body .app-shell .primary:hover{background:#088eac;color:#fff}
+html body .primary:active,html body .app-shell .primary:active{box-shadow:none;transform:scale(.98)}
+html body .primary svg{color:#fff}
+html body .secondary-btn{background:var(--ap-fill);border:0;border-radius:980px;color:var(--ap-tint);font-weight:600}
+html body .secondary-btn:hover{background:rgba(118,118,128,.18)}
+html body .text-btn{color:var(--ap-tint)}
+html body button:focus-visible,html body a:focus-visible{outline:3px solid rgba(10,159,192,.45);outline-offset:2px}
+
+/* Campos */
+html body input,html body textarea,html body select{border:1px solid rgba(60,60,67,.18);border-radius:10px;background:#fff;color:var(--ap-text)}
+html body input:focus,html body textarea:focus,html body select:focus{outline:0;border-color:var(--ap-tint);box-shadow:0 0 0 3px rgba(10,159,192,.2)}
+html body label{font-weight:500;color:var(--ap-text)}
+
+/* Tarjetas genéricas: blanco, sin borde, sombra suave */
+html body .app-shell :is(.calendar-panel,.table-panel,.panel,.client-card,.review-card,.dash-card,.summary-card,.list-panel,.pj-tile,.pj-col,.goal-card,.kpi){border:0;border-radius:16px;background:var(--ap-card);box-shadow:var(--ap-shadow)}
+
+/* Resumen: tarjetas blancas con el color solo en el título */
+html body .app-shell .kpi{background:var(--ap-card)!important;padding:16px 18px;gap:4px}
+html body .app-shell .kpi span{font-size:13px;font-weight:600;color:var(--ap-tint)!important}
+html body .app-shell .kpi b{font-size:30px;font-weight:700;letter-spacing:-.02em;color:var(--ap-text)!important}
+html body .app-shell .kpi small{font-size:12px;font-weight:500;color:var(--ap-3)!important}
+html body .app-shell .kpi-review span{color:#8433b0!important}
+html body .app-shell .kpi-changes span{color:#c4370f!important}
+html body .app-shell .kpi-comments span{color:#1d7f38!important}
+html body .app-shell .goal-card{background:var(--ap-card)!important}
+html body .app-shell .goal-card *{color:var(--ap-text)!important}
+html body .app-shell .goal-card>div span{font-weight:600}
+html body .app-shell .goal-card p,html body .app-shell .goal-card small,html body .app-shell .goal-card .goal-off{color:var(--ap-2)!important}
+html body .app-shell .goal-card progress{height:5px;background:var(--ap-fill)!important}
+html body .app-shell .goal-card progress::-webkit-progress-bar{background:var(--ap-fill)}
+html body .app-shell .goal-card progress::-webkit-progress-value{background:var(--ap-cyan)}
+
+/* Controles segmentados y filtros */
+html body .app-shell .segmented{background:var(--ap-fill);border:0;border-radius:9px;padding:2px}
+html body .app-shell .segmented button{border-radius:7px;color:var(--ap-text);font-weight:500;font-size:13px}
+html body .app-shell .segmented button.on,html body .app-shell .segmented button.active{background:#fff;color:var(--ap-text);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
+html body .app-shell .channel-chips button{border:0;background:var(--ap-fill);color:var(--ap-text);font-weight:500;border-radius:980px}
+html body .app-shell .channel-chips button.on{background:var(--ap-text);color:#fff}
+html body .app-shell .filters select.state-pill{border:1px solid rgba(60,60,67,.18);border-radius:10px}
+html body .app-shell .key-toggle{border:0;background:var(--ap-fill);color:var(--ap-text);border-radius:980px}
+html body .app-shell .key-toggle.on{background:rgba(19,219,251,.18);color:#066d84}
+html body .app-shell .key-add{border:0;background:none;color:var(--ap-tint)}
+
+/* Calendario */
+html body .app-shell .cal-bar{border:0;background:var(--ap-card);box-shadow:none;border-bottom:1px solid var(--ap-sep)}
+html body .app-shell .cal-bar .month-controls h2{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--ap-text)}
+html body .app-shell .cal-bar .icon-btn,html body .app-shell .cal-bar .today-btn{border:0;background:var(--ap-fill);border-radius:980px;color:var(--ap-text)}
+html body .app-shell .cal-bar .today-btn{color:var(--ap-tint)}
+html body .app-shell .day-names span{font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--ap-3)}
+html body .app-shell .day{border-color:var(--ap-sep)!important;background:#fff}
+html body .app-shell .day.outside{background:#fbfbfd}
+html body .app-shell .day.outside .day-header>span:first-child{color:#c7c7cc}
+html body .app-shell .day-header>span:first-child{font-size:13px;font-weight:500;color:var(--ap-text)}
+html body .app-shell .day.today{background:#fff!important}
+html body .app-shell .day.today .day-header>span:first-child{display:inline-flex;align-items:center;justify-content:center;width:26px!important;height:26px;border-radius:50%!important;background:var(--ap-cyan)!important;color:#002a33!important;font-weight:700}
+html body .app-shell .day-add{color:#c7c7cc}
+html body .app-shell .key-date{border:0;border-radius:6px;font-size:11px;font-weight:500;background:var(--ap-fill2);color:var(--ap-2)}
+html body .app-shell .key-date.comercial{background:rgba(255,98,55,.1);color:#c4370f}
+html body .app-shell .legend{color:var(--ap-3)}
+html body .app-shell .day.today .day-header>.day-dots{background:none!important;width:auto!important;height:auto!important}
+@media(min-width:980px){html body .app-shell .day-dots{display:none!important}}
+
+/* Fichas de publicación: blancas, cápsula de estado, sin cabecera de color */
+html body .app-shell .post-card{background:#fff!important;border:0!important;border-radius:12px!important;box-shadow:0 0 0 .5px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.06)!important;overflow:hidden;padding:0!important}
+html body .app-shell .post-card:hover{box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 4px 14px rgba(0,0,0,.1)!important}
+html body .app-shell .post-card .post-head{background:none!important;color:var(--ap-3)!important;padding:8px 10px 0!important;border:0!important;font-size:11px!important;font-weight:500!important;display:flex;align-items:center;justify-content:space-between;gap:6px}
+html body .app-shell .post-card .post-head>span:first-child{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:980px;background:var(--st-bg);color:var(--st-ink)!important;font-weight:600}
+html body .app-shell .post-card .post-head>span:first-child:before{content:'';width:6px;height:6px;border-radius:50%;background:var(--st)}
+html body .app-shell .post-card .post-head>span:nth-child(2){margin-left:auto;color:var(--ap-3)!important;font-variant-numeric:tabular-nums}
+html body .app-shell .post-card .post-head>b{display:none}
+html body .app-shell .post-card .post-body{background:#fff!important;padding:8px 10px 10px!important;gap:4px 8px}
+html body .app-shell .post-card .post-thumb{border-radius:8px!important;background:var(--ap-fill2)!important;overflow:hidden}
+html body .app-shell .post-card .post-thumb em{color:var(--ap-3)}
+html body .app-shell .post-card .post-body strong{color:var(--ap-text)!important;font-size:13px;font-weight:600!important;letter-spacing:-.01em;line-height:1.25}
+html body .app-shell .post-card .post-bottom,html body .app-shell .post-card .post-bottom *{color:var(--ap-2)!important;font-size:12px}
+html body .app-shell .post-card .post-net{background:none!important;color:var(--ap-3)!important}
+html body .app-shell .post-card .post-foot{border-top:0!important;padding-top:0!important;margin-top:2px}
+html body .app-shell .post-card .post-foot span{color:var(--ap-3)!important;font-size:11px}
+html body .app-shell .post-card.no-img,html body .app-shell .post-card.no-img .post-body{background:#fff!important}
+
+/* Mi semana */
+html body .app-shell .wk-card{background:#fff!important;border:0!important;border-radius:12px!important;box-shadow:0 0 0 .5px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.06)!important}
+html body .app-shell .wk-card .wk-head{background:none!important;padding:8px 10px 0!important;border:0!important}
+html body .app-shell .wk-card .wk-head>span{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:980px;background:var(--st-bg,var(--ap-fill));color:var(--st-ink,var(--ap-2))!important;font-size:11px;font-weight:600}
+html body .app-shell .wk-col{background:transparent;border:0}
+html body .app-shell .wk-col.today h3 b{background:var(--ap-cyan);color:#002a33;border-radius:980px}
+
+/* Proyectos: columnas neutras */
+html body .app-shell .pj-col{background:rgba(118,118,128,.06)!important;box-shadow:none}
+html body .app-shell .pj-col *{--pj:inherit}
+html body .app-shell .pj-tile{background:#fff!important}
+html body .app-shell .pj-tile *{color:inherit}
+
+/* Etiquetas de estado sueltas (listas, Resumen) */
+html body .app-shell .status-pill,html body .app-shell .badge[class*=state-],html body .app-shell [class*=state-].pill{background:var(--st-bg)!important;color:var(--st-ink)!important;border:0;border-radius:980px;font-weight:600}
+
+/* Ventanas y paneles laterales */
+html body .modal-overlay,html body .drawer-overlay{background:rgba(0,0,0,.28);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+html body .modal,html body .drawer{border-radius:20px;box-shadow:var(--ap-shadow-lg)}
+html body .modal-header h2,html body .drawer h1{font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--ap-text)}
+
+/* Móvil */
+@media(max-width:979px){
+html body .app-shell .topbar{background:rgba(245,245,247,.8);-webkit-backdrop-filter:saturate(1.8) blur(20px);backdrop-filter:saturate(1.8) blur(20px);border-bottom:.5px solid var(--ap-sep)}
+html body .app-shell .topbar b{font-size:17px;font-weight:600;color:var(--ap-text)}
+html body .app-shell .topbar .icon-btn{color:var(--ap-tint)}
+html body .app-shell .page-heading h1{font-size:32px}
+html body .app-shell .cal-bar{border-radius:16px;border:0;box-shadow:var(--ap-shadow)}
+html body .app-shell .cal-bar .month-controls h2{font-size:18px}
+html body .app-shell .calendar-panel{border-radius:16px}
+html body .app-shell .day{border-left:0!important;border-right:0!important;background:#fff!important}
+html body .app-shell .day.outside{background:#fff!important}
+html body .app-shell .day.today .day-header>span:first-child{width:28px!important;height:28px}
+html body .app-shell .mobile-filter-toggle{border:0;border-radius:14px;background:#fff;box-shadow:var(--ap-shadow);color:var(--ap-text)}
+html body .app-shell .mobile-filter-toggle svg{color:var(--ap-3)}
+html body .tab-bar{background:rgba(250,250,252,.72);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 8px 30px rgba(0,0,0,.12)}
+html body .tab-ind{background:rgba(118,118,128,.12);box-shadow:none}
+html body .tab-item{color:#8e8e93;font-weight:500;font-size:10px}
+html body .tab-item.on{color:var(--ap-tint);font-weight:600}
+html body .tab-item.on .tab-icon{transform:none}
+html body .mobile-fab{background:var(--ap-tint);color:#fff;box-shadow:0 6px 20px rgba(10,159,192,.35)}
+html body .modal-overlay>.modal,html body .drawer-overlay>.drawer{border-radius:20px 20px 0 0}
+}
