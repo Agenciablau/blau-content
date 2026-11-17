@@ -736,3 +736,7 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 .app-shell .post-body .post-bottom{flex-direction:row;justify-content:flex-start}
 .post-head span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .post-net,.post-net.net-instagram,.post-net.net-linkedin,.post-net.net-facebook{background:none;color:var(--blau-muted);width:auto;height:auto;border-radius:0}.post-net svg{width:13px!important;height:13px!important}
+/* Texto en un tono más oscuro del color de la tarjeta, como en la referencia */
+.state-review{--status-solid:#c9a0ff;--status-on:#3b0a7a}
+.app-shell .post-card.no-img.state-idea .post-body strong,.app-shell .post-card.no-img.state-idea .post-body .post-bottom,.app-shell .post-card.no-img.state-idea .post-net,.app-shell .post-card.no-img.state-idea .post-foot,.app-shell .post-card.no-img.state-idea .post-foot b{color:#6b5200}
+.app-shell .post-card.no-img.state-idea .post-foot{border-top-color:#f0d98a}
