@@ -171,3 +171,8 @@ html body .app-shell .pj-tabs>button[aria-selected="true"]{color:var(--ap-tint);
 html body .app-shell .seg-ind{position:absolute;top:0;left:0;z-index:0;border-radius:8px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04);transition:transform .5s cubic-bezier(.34,1.56,.64,1),width .5s cubic-bezier(.34,1.56,.64,1),opacity .2s;pointer-events:none}
 html body .app-shell .seg-ind.go{animation:tab-stretch .5s ease}
 @media(prefers-reduced-motion:reduce){html body .app-shell .seg-ind{transition:none}html body .app-shell .seg-ind.go{animation:none}}
+/* Indicador activo en cian Blau con efecto vidrio e icono y texto blancos (barra del móvil y pestañas) */
+html body .tab-ind,html body .app-shell .seg-ind{background:linear-gradient(180deg,rgba(19,219,251,.82),rgba(8,184,224,.9));-webkit-backdrop-filter:saturate(1.8) blur(12px);backdrop-filter:saturate(1.8) blur(12px);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 0 0 .5px rgba(255,255,255,.35),0 4px 14px rgba(19,219,251,.35)}
+html body .tab-item.on,html body .app-shell .segmented>button.active,html body .app-shell .segmented>button.on,html body .app-shell .pj-tabs>button[aria-selected="true"]{color:#fff;font-weight:600;text-shadow:0 1px 1px rgba(0,54,128,.25)}
+html body .tab-item.on svg,html body .app-shell .segmented>button.active svg,html body .app-shell .pj-tabs>button[aria-selected="true"] svg{color:#fff;filter:drop-shadow(0 1px 1px rgba(0,54,128,.25))}
+html body .app-shell .pj-tabs>button[aria-selected="true"] .pj-tabn{background:rgba(255,255,255,.3);color:#fff}
