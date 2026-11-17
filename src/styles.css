@@ -637,3 +637,37 @@ input.pe-switch{appearance:none;-webkit-appearance:none;width:40px;min-width:40p
 @media(max-width:1000px){.wk-layout{grid-template-columns:minmax(0,1fr)}.wk-tray{position:static;max-height:none}.wk-focus,.wk-close{grid-template-columns:minmax(0,1fr)}.wk-brand{margin-left:0}}
 
 .wk-hide{display:flex;align-items:center;width:auto;gap:4px;padding:0 6px;font-size:11.5px;margin-left:auto}.wk-hide span{line-height:1}.wk-card{cursor:pointer}.wk-card:hover{box-shadow:0 2px 8px #0f1d2e1a}
+/* Navegación móvil: barra inferior flotante y calendario con agenda */
+.tab-bar,.mobile-fab,.day-agenda,.day-dots{display:none}
+@media(max-width:979px){
+.tab-bar{display:flex;position:fixed;z-index:15;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));height:64px;padding:5px;border-radius:32px;background:rgba(255,255,255,.62);-webkit-backdrop-filter:blur(18px) saturate(1.8);backdrop-filter:blur(18px) saturate(1.8);border:1px solid rgba(255,255,255,.85);box-shadow:0 8px 28px rgba(16,36,58,.18),inset 0 1px 1px rgba(255,255,255,.9);touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.tab-ind{position:absolute;top:5px;bottom:5px;left:5px;width:calc((100% - 10px)/var(--n));border-radius:27px;background:rgba(19,219,251,.24);box-shadow:inset 0 0 0 1px rgba(255,255,255,.75),0 2px 8px rgba(19,219,251,.25);transition:transform .5s cubic-bezier(.34,1.56,.64,1);pointer-events:none}
+.tab-ind.go{animation:tab-stretch .5s ease}
+@keyframes tab-stretch{40%{scale:1.16 1.08}}
+.tab-bar.dragging .tab-ind{transition-duration:.25s}
+.tab-item{flex:1;position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;border:0;background:none;padding:0;font:inherit;font-size:11px;color:var(--blau-muted);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color .25s}
+.tab-item .tab-icon{display:inline-flex;position:relative;transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
+.tab-item.on{color:#00566b;font-weight:700}.tab-item.on .tab-icon{transform:scale(1.2)}
+.tab-badge{position:absolute;top:-5px;right:-9px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#d92d20;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center}
+.app-shell .content{padding-bottom:104px}
+.app-shell .toast{bottom:92px}
+.mobile-fab{display:flex;align-items:center;justify-content:center;position:fixed;z-index:14;right:20px;bottom:calc(88px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;border:0;background:#13dbfb;color:var(--blau-ink);box-shadow:0 4px 14px rgba(16,36,58,.25)}
+.app-shell .page-heading>.primary{display:none}
+/* Calendario compacto: puntos de color y agenda del día */
+.app-shell .calendar-scroll{overflow:visible}
+.app-shell .calendar{min-width:0!important;width:100%}.app-shell .day-names,.app-shell .day-grid{grid-template-columns:repeat(7,minmax(0,1fr))}.app-shell .day-names span{text-align:center;overflow:hidden;font-size:10px;letter-spacing:0}.app-shell .day>*{min-width:0}
+.app-shell .day{min-height:50px!important;height:auto!important;padding:4px 0!important;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.app-shell .day .post-card,.app-shell .day .key-date,.app-shell .day .day-add,.app-shell .day .day-ph{display:none!important}
+.app-shell .day-header{flex-direction:column;align-items:center;gap:2px;padding:0!important;width:100%;justify-content:center}
+.app-shell .day-header>span:first-child{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;font-size:13px}
+.app-shell .day.sel .day-header>span:first-child{box-shadow:0 0 0 2px var(--blau-navy)}
+.day-dots{display:flex;gap:3px;height:6px}.day-dots i{width:6px;height:6px;border-radius:50%}.day-dots i.kd{background:#d92d20;opacity:.6}
+.day-agenda{display:flex;flex-direction:column;gap:8px;padding:14px 4px 4px}
+.day-agenda h3{margin:0;font-size:14px}.day-agenda h3::first-letter{text-transform:uppercase}
+.day-agenda-empty{margin:0;font-size:13px;color:var(--blau-muted)}
+.day-agenda .post-card{display:block;width:100%}
+.app-shell .legend{display:none}
+.view-calendar .monthly-commitments,.view-calendar .goal-cards,.view-calendar .page-heading p{display:none}
+}
+@media(max-width:360px){.tab-item{font-size:10px}.tab-bar{left:8px;right:8px}}
+@media(prefers-reduced-motion:reduce){.tab-ind,.tab-item .tab-icon{transition:none}.tab-ind.go{animation:none}}
