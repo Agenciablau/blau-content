@@ -10,15 +10,17 @@ import {loadNotes,loadNoteViews,noteAction,noteActions} from './project-notes';
 import {loadWeek,weekAction,weekActions,weekSince} from './week';
 import {readPermissions,normalizePermissions} from '../shared/collaborator-access';
 import {loadLabs,labsAction,labsActions} from './labs';
+import {normalizeSelection,readSelection} from '../shared/labs';
 export function createWorkspaceApi(env:Env,user:User){
 const statuses=['Idea','Idea aprobada','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
 const channels=['Instagram','LinkedIn','Email','Blog / web','TikTok','Facebook'];
 const formats=['Reel','Carrusel','Historia','Imagen','Newsletter','Campaña de email','Artículo','Vídeo'];
 const allowedFormats:Record<string,string[]>={Instagram:['Reel','Carrusel','Historia','Imagen'],Facebook:['Reel','Carrusel','Historia','Imagen','Vídeo'],LinkedIn:['Carrusel','Imagen','Vídeo','Artículo'],TikTok:['Vídeo','Imagen'],Email:['Newsletter','Campaña de email'],'Blog / web':['Artículo']};
 const fail=(error:string,status=400)=>Response.json({error},{status});
-/** El cliente no ve Idea, Idea aprobada ni Borrador, salvo las ideas de una campaña que el equipo le ha enviado (shared=1). */
-const clientVisible="(status NOT IN ('Idea','Idea aprobada','Borrador') OR (shared=1 AND status IN ('Idea','Idea aprobada')))";
-const clientHides=(p:any)=>['Idea','Idea aprobada','Borrador'].includes(p.status)&&!(p.shared&&['Idea','Idea aprobada'].includes(p.status));
+/** El cliente no ve Idea, Idea aprobada ni Borrador, salvo las ideas de una campaña que no esté en borrador: esas le llegan solas. */
+const liveCampaign="EXISTS(SELECT 1 FROM campaigns k WHERE k.id=posts.campaign_id AND k.status<>'draft')";
+const clientVisible=`(status NOT IN ('Idea','Idea aprobada','Borrador') OR (status IN ('Idea','Idea aprobada') AND campaign_id<>'' AND ${liveCampaign}))`;
+const clientHides=async(db:D1Database,p:any)=>['Idea','Idea aprobada','Borrador'].includes(p.status)&&!(['Idea','Idea aprobada'].includes(p.status)&&!!p.campaign_id&&!!await db.prepare("SELECT id FROM campaigns WHERE id=? AND status<>'draft'").bind(p.campaign_id).first());
 async function context(){
 
  const db=env.DB!; const w:any=await db.prepare('SELECT * FROM workspace WHERE id=1').first();
@@ -101,8 +103,8 @@ async function POST(req:Request){
  if(labsActions.includes(b.action)){if(own&&!soc.length)return fail('Tu acceso no incluye redes sociales.',403);if(collaborator)return fail('Labs es de solo lectura para colaboradores.',403);return (await labsAction({db:c.db,role:c.role,staff,preview:!!preview,social:soc,user:c.user},b))??Response.json({ok:true});}
  if(['post','review','comment','delete','editComment','resolveComments'].includes(b.action)&&own&&!soc.length)return fail('Tu acceso no incluye redes sociales.',403);
  if(b.action==='resolveComments'){
-  const post=await c.db.prepare('SELECT id,client_id,status,client_changed_at FROM posts WHERE id=?').bind(str(b.id,100)).first<any>();
-  if(!post||!staff&&(!soc.includes(post.client_id)||c.role==='client'&&clientHides(post)))return fail('Publicación no encontrada.',404);
+  const post=await c.db.prepare('SELECT id,client_id,status,campaign_id,client_changed_at FROM posts WHERE id=?').bind(str(b.id,100)).first<any>();
+  if(!post||!staff&&(!soc.includes(post.client_id)||c.role==='client'&&await clientHides(c.db,post)))return fail('Publicación no encontrada.',404);
   await c.db.prepare(`UPDATE comments SET resolved=1 WHERE post_id=? AND internal=0 AND resolved=0${staff?'':' AND created_at>?'}`).bind(post.id,...(staff?[]:[post.client_changed_at??''])).run();
   return Response.json({ok:true});
  }
@@ -194,7 +196,7 @@ async function POST(req:Request){
   if(b.id&&!existing)return fail('Publicación no encontrada.',404);
   if(collaborator&&((existing&&!soc.includes(existing.client_id))||(b.action==='post'&&!soc.includes(b.client_id))))return fail('Sin permiso.',403);
   if(existing&&['post','review'].includes(b.action)&&existing.updated_at!==b.updated_at)return fail('La publicación ha cambiado. Actualiza antes de continuar.',409);
-  if(existing&&c.role==='client'&&(!soc.includes(existing.client_id)||clientHides(existing)))return fail('Sin permiso.',403);
+  if(existing&&c.role==='client'&&(!soc.includes(existing.client_id)||await clientHides(c.db,existing)))return fail('Sin permiso.',403);
   if(b.action==='comment'){
    const body=str(b.body),internal=b.internal===true;if(!body)return fail('Escribe un comentario.');if(internal&&!can('internal_notes'))return fail('Solo el equipo puede dejar notas internas.',403);
    const result=await c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved,internal) SELECT ?,?,?,?,?,?,0,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND client_id=? AND client_changed_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,body,new Date().toISOString(),c.role==='client'&&!preview?'client':'team',internal?1:0,existing.id,existing.client_id,existing.client_changed_at??'').run();if(!result.meta.changes)return fail('La publicación ha cambiado de cliente. Actualiza antes de comentar.',409);
@@ -238,6 +240,8 @@ async function POST(req:Request){
    if(existing?.status==='Publicado')return fail('Las publicaciones publicadas se conservan. Crea una nueva versión para modificarlas.');
    if(typeof b.asset==='string'&&b.asset.length>42000)return fail('Los enlaces de material son demasiado largos.');const materialError=validateMaterial(asset,b.format);if(materialError)return fail(materialError);
    if(!await c.db.prepare('SELECT id FROM clients WHERE id=? AND archived=0').bind(str(b.client_id)).first())return fail('Selecciona un cliente activo.');
+   let selectionJson:string|null=null;
+   if(staff&&b.idea!==undefined&&b.status==='Idea'){try{const n=normalizeSelection(b.idea,readSelection(existing?.selection),()=>crypto.randomUUID());selectionJson=n?JSON.stringify(n):'';}catch(e){return fail(e instanceof Error?e.message:'Revisa la idea.');}}
    const reassign=!!existing&&existing.client_id!==b.client_id;
    let campaignId=reassign?'':str(b.campaign_id,100),momentId=reassign?'':str(b.moment_id,100);
    if(campaignId){const camp=await c.db.prepare('SELECT client_id FROM campaigns WHERE id=?').bind(campaignId).first<any>();if(!camp||camp.client_id!==b.client_id)return fail('La campaña elegida no corresponde a este cliente.');if(momentId&&!await c.db.prepare('SELECT id FROM campaign_moments WHERE id=? AND campaign_id=?').bind(momentId,campaignId).first())return fail('El momento elegido no pertenece a la campaña.');}else momentId='';
@@ -252,8 +256,8 @@ async function POST(req:Request){
    if(status==='En revisión'&&b.status==='En revisión'&&existing?.status!=='En revisión'&&!can('posts_send'))return fail('Tu acceso no permite enviar publicaciones a revisión.',403);
    const changedAt=new Date().toISOString();
    const now=changedAt+':'+crypto.randomUUID();
-   if(existing){const r=await c.db.prepare(`UPDATE posts SET title=?,copy=?,channel=?,format=?,date=?,status=?,asset=?,updated_at=?,client_id=?,client_changed_at=?,buffer_music=?,campaign_id=?,moment_id=?,shared=? WHERE id=? AND updated_at=? AND (?=0 OR NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id)) AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')}))`).bind(title,copy,b.channel,b.format,date,status,asset,now,b.client_id,reassign?changedAt:existing.client_changed_at??'',music,campaignId,momentId,campaignId&&!reassign&&['Idea','Idea aprobada'].includes(status)?existing.shared:0,existing.id,b.updated_at,reassign?1:0).run();if(!r.meta.changes)return fail('Otra persona ha actualizado esta publicación. Recarga para ver los cambios.',409);}
-   else await c.db.prepare('INSERT INTO posts(id,client_id,title,copy,channel,format,date,status,asset,updated_at,buffer_music,campaign_id,moment_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),b.client_id,title,copy,b.channel,b.format,date,status,asset,now,music,campaignId,momentId).run();
+   if(existing){const r=await c.db.prepare(`UPDATE posts SET title=?,copy=?,channel=?,format=?,date=?,status=?,asset=?,updated_at=?,client_id=?,client_changed_at=?,buffer_music=?,campaign_id=?,moment_id=?,shared=?,selection=? WHERE id=? AND updated_at=? AND (?=0 OR NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id)) AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')}))`).bind(title,copy,b.channel,b.format,date,status,asset,now,b.client_id,reassign?changedAt:existing.client_changed_at??'',music,campaignId,momentId,campaignId&&!reassign&&['Idea','Idea aprobada'].includes(status)?existing.shared:0,selectionJson??existing.selection??'',existing.id,b.updated_at,reassign?1:0).run();if(!r.meta.changes)return fail('Otra persona ha actualizado esta publicación. Recarga para ver los cambios.',409);}
+   else await c.db.prepare('INSERT INTO posts(id,client_id,title,copy,channel,format,date,status,asset,updated_at,buffer_music,campaign_id,moment_id,selection) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),b.client_id,title,copy,b.channel,b.format,date,status,asset,now,music,campaignId,momentId,selectionJson??'').run();
   }
  }else return fail('Acción desconocida.');
  return Response.json({ok:true,...extra});

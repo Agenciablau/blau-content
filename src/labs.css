@@ -1,6 +1,6 @@
 /* Labs: campañas, momentos y selección de ideas con el cliente. Usa los tokens de apple.css. */
 html body .state-idea-ok{--st:#d99a00;--st-ink:#6b4f00;--st-bg:rgba(255,204,0,.34);--status-ink:#6b4f00;--status-surface:#ffe680;--status-line:#ffd84d;--status-solid:#ffd84d;--status-on:#3d2e00}
-.lb{display:flex;flex-direction:column;gap:16px;max-width:1180px}
+.lb{display:flex;flex-direction:column;gap:16px;width:100%}
 .lb-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
 .lb-head h1{font-size:34px;font-weight:700;letter-spacing:-.025em;color:var(--ap-text);margin:2px 0 0}.lb-head p{color:var(--ap-2);margin:6px 0 0}
 .lb-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -37,7 +37,7 @@ button.lb-card{cursor:pointer;transition:box-shadow .15s,transform .15s}button.l
 .lb-item{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;border-top:1px solid var(--ap-sep);padding:11px 4px;text-align:left;font:inherit;color:var(--ap-text);cursor:pointer;border-radius:0}.lb-item:hover{background:var(--ap-fill2)}
 .lb-item>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.lb-item b{font-weight:600;overflow:hidden;text-overflow:ellipsis}.lb-item small{color:var(--ap-2)}
 /* Presupuesto */
-.lb-table{display:flex;flex-direction:column}.lb-trow{display:grid;grid-template-columns:1.1fr .8fr 2fr;gap:12px;padding:11px 0;border-top:1px solid var(--ap-sep);align-items:center}.lb-trow.head{font-size:12px;font-weight:600;color:var(--ap-3);border-top:0}.lb-trow i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px}.lb-trow em{color:var(--ap-3);font-style:normal}
+.lb-table{display:flex;flex-direction:column}.lb-trow{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;padding:11px 0;border-top:1px solid var(--ap-sep);align-items:center}.lb-trow.head{font-size:12px;font-weight:600;color:var(--ap-3);border-top:0}.lb-trow i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px}.lb-trow em{color:var(--ap-3);font-style:normal}
 /* Calendario */
 .lb-month{display:flex;align-items:center;gap:8px}.lb-month h2{text-transform:capitalize;min-width:150px;text-align:center}
 .lb-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ap-3);font-weight:500}.lb-legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px}
@@ -79,3 +79,9 @@ html body .lb-tabs.segmented button.active{background:linear-gradient(180deg,rgb
 .lb-month h2{text-transform:none}.lb-month h2::first-letter{text-transform:uppercase}
 html body .lb-final{flex-direction:row!important;align-items:center}.lb-final input{margin:0}
 @media(max-width:979px){.lb-callout{flex-direction:column;align-items:flex-start}.lb-callout .primary{align-self:stretch}}
+
+.lb-mbody{display:flex;flex-direction:column;gap:10px;padding:4px 2px 2px}.lb-mbody textarea,.lb-mbody input{width:100%}.lb-mbody input[type=number]{max-width:200px}
+.lb-fold svg{transition:transform .15s}.lb-fold.open svg{transform:rotate(180deg)}
+.lb-mdesc{display:flex;flex-direction:column;gap:10px;margin-top:6px;padding-top:12px;border-top:1px solid var(--ap-sep)}.lb-mdesc b{font-size:13px}.lb-mdesc p{margin:2px 0 0;color:var(--ap-2);font-size:13px;line-height:1.45;white-space:pre-line}
+.lb-explain{display:flex;flex-direction:column}.lb-explain .lb-text{white-space:pre-line}
+.lb-idea{display:flex;flex-direction:column;gap:12px}.lb-idea textarea{width:100%}
