@@ -9,12 +9,16 @@ import {loadProjects,projectAction,projectActions} from './projects';
 import {loadNotes,loadNoteViews,noteAction,noteActions} from './project-notes';
 import {loadWeek,weekAction,weekActions,weekSince} from './week';
 import {readPermissions,normalizePermissions} from '../shared/collaborator-access';
+import {loadLabs,labsAction,labsActions} from './labs';
 export function createWorkspaceApi(env:Env,user:User){
-const statuses=['Idea','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
+const statuses=['Idea','Idea aprobada','Borrador','En revisión','Cambios solicitados','Aprobado','Planificado','Publicado'];
 const channels=['Instagram','LinkedIn','Email','Blog / web','TikTok','Facebook'];
 const formats=['Reel','Carrusel','Historia','Imagen','Newsletter','Campaña de email','Artículo','Vídeo'];
 const allowedFormats:Record<string,string[]>={Instagram:['Reel','Carrusel','Historia','Imagen'],Facebook:['Reel','Carrusel','Historia','Imagen','Vídeo'],LinkedIn:['Carrusel','Imagen','Vídeo','Artículo'],TikTok:['Vídeo','Imagen'],Email:['Newsletter','Campaña de email'],'Blog / web':['Artículo']};
 const fail=(error:string,status=400)=>Response.json({error},{status});
+/** El cliente no ve Idea, Idea aprobada ni Borrador, salvo las ideas de una campaña que el equipo le ha enviado (shared=1). */
+const clientVisible="(status NOT IN ('Idea','Idea aprobada','Borrador') OR (shared=1 AND status IN ('Idea','Idea aprobada')))";
+const clientHides=(p:any)=>['Idea','Idea aprobada','Borrador'].includes(p.status)&&!(p.shared&&['Idea','Idea aprobada'].includes(p.status));
 async function context(){
 
  const db=env.DB!; const w:any=await db.prepare('SELECT * FROM workspace WHERE id=1').first();
@@ -44,26 +48,26 @@ async function GET(req?:Request){
  if(req&&new URL(req.url).searchParams.get('export')==='1'){
   if(c.role!=='owner')return fail('Solo el administrador puede exportar.',403);
   const backup:any={exported_at:new Date().toISOString(),version:1};
-  for(const table of ['clients','posts','comments','reviews','members','key_dates','projects','project_tasks','project_comments','project_reviews','member_clients','project_notes','project_note_views','week_plan','week_notes','week_hidden'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
+  for(const table of ['clients','posts','comments','reviews','members','key_dates','projects','project_tasks','project_comments','project_reviews','member_clients','project_notes','project_note_views','week_plan','week_notes','week_hidden','campaigns','campaign_moments'])backup[table]=(await c.db.prepare(`SELECT * FROM ${table}`).all()).results;
   backup.owner_name=c.w.owner_name??'';
   return Response.json(backup,{headers:{'Cache-Control':'no-store','Content-Disposition':'attachment; filename=blau-content-backup.json'}});
  }
  const cl=scoped?{results:own.rows}:await c.db.prepare('SELECT * FROM clients ORDER BY name').all();
  const soc=own.social,inSoc=marks(soc),bs=scoped?soc:[];
- const p=await c.db.prepare(client?`SELECT * FROM posts WHERE client_id ${inSoc} AND status NOT IN ('Idea','Borrador') ORDER BY date`:scoped?`SELECT * FROM posts WHERE client_id ${inSoc} ORDER BY date`:"SELECT * FROM posts ORDER BY date").bind(...bs).all();
- const scope=client?` WHERE post_id IN (SELECT id FROM posts WHERE client_id ${inSoc} AND status NOT IN ('Idea','Borrador'))`:scoped?` WHERE post_id IN (SELECT id FROM posts WHERE client_id ${inSoc})`:'';
+ const p=await c.db.prepare(client?`SELECT * FROM posts WHERE client_id ${inSoc} AND ${clientVisible} ORDER BY date`:scoped?`SELECT * FROM posts WHERE client_id ${inSoc} ORDER BY date`:"SELECT * FROM posts ORDER BY date").bind(...bs).all();
+ const scope=client?` WHERE post_id IN (SELECT id FROM posts WHERE client_id ${inSoc} AND ${clientVisible})`:scoped?` WHERE post_id IN (SELECT id FROM posts WHERE client_id ${inSoc})`:'';
  const commentScope=scope+(scoped?(notes?'':' AND internal=0')+' AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=comments.post_id)':'');
  const reviewScope=scope+(scoped?' AND created_at > (SELECT client_changed_at FROM posts WHERE posts.id=reviews.post_id)':'');
  const co=await c.db.prepare('SELECT * FROM comments'+commentScope+' ORDER BY created_at, rowid').bind(...bs).all();
  const history=await c.db.prepare('SELECT id,post_id,actor,role,decision,snapshot,created_at FROM reviews'+reviewScope+' ORDER BY created_at DESC').bind(...bs).all();
  const m=c.role==='owner'?await c.db.prepare('SELECT * FROM members ORDER BY role,email').all():c.role==='team'?await c.db.prepare("SELECT email,role,client_id,name,permissions FROM members WHERE role IN ('client','collaborator') ORDER BY email").all():{results:[]};
  const extraMarks=c.role==='owner'||c.role==='team'?(await c.db.prepare('SELECT email,client_id FROM member_clients ORDER BY rowid').all<any>()).results:[];
- const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?` WHERE client_id ${inSoc} AND post_id IN (SELECT id FROM posts WHERE status NOT IN ('Idea','Borrador'))`:scoped?` WHERE client_id ${inSoc}`:'')).bind(...bs).all();
+ const jobs=await c.db.prepare('SELECT post_id,state,mode,error,updated_at FROM buffer_jobs'+(client?` WHERE client_id ${inSoc} AND post_id IN (SELECT id FROM posts WHERE ${clientVisible})`:scoped?` WHERE client_id ${inSoc}`:'')).bind(...bs).all();
  const keyDates=await c.db.prepare('SELECT id,client_id,date,title,yearly FROM key_dates'+(scoped?` WHERE (${soc.length?'client_id IS NULL OR ':''}client_id ${inSoc})`:'')+' ORDER BY date').bind(...bs).all();
- const projectData=await loadProjects(c.db,c.role,scoped?own.projects:null,c.perms),projectNotes=c.role==='owner'||c.role==='team'?await loadNotes(c.db):client?await loadNotes(c.db,own.projects):[],noteViews=c.role==='owner'?await loadNoteViews(c.db):[],week=c.role==='owner'?await loadWeek(c.db,weekSince(new Date().toISOString())):null;
+ const projectData=await loadProjects(c.db,c.role,scoped?own.projects:null,c.perms),projectNotes=c.role==='owner'||c.role==='team'?await loadNotes(c.db):client?await loadNotes(c.db,own.projects):[],noteViews=c.role==='owner'?await loadNoteViews(c.db):[],week=c.role==='owner'?await loadWeek(c.db,weekSince(new Date().toISOString())):null,labs=scoped&&!own.social.length?{campaigns:[],campaignMoments:[]}:await loadLabs(c.db,!scoped,own.social);
  const names=new Map<string,string>((await c.db.prepare("SELECT email,name FROM members WHERE name<>''").all<any>()).results.map((r:any)=>[r.email,r.name]));if(c.w.owner_name)names.set(c.w.email,c.w.owner_name);
  const named=(v:string)=>names.get(String(v??'').toLowerCase())||v;
- return Response.json({needsSetup:false,preview:!!preview,role:c.role,...(c.role==='collaborator'?{permissions:c.perms}:{}),user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),members:m.results.map((x:any)=>x.role==='collaborator'?{...x,client_ids:[x.client_id,...extraMarks.filter((e:any)=>e.email===x.email&&e.client_id!==x.client_id).map((e:any)=>e.client_id)]}:x),reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)})),...(c.role==='owner'||c.role==='team'||client?{projectNotes:projectNotes.map((x:any)=>({...x,author:named(x.author)}))}:{}),...(week?week:{}),...(c.role==='owner'?{projectNoteViews:noteViews.map((x:any)=>({...x,name:named(x.email)}))}:{})},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({needsSetup:false,preview:!!preview,role:c.role,...(c.role==='collaborator'?{permissions:c.perms}:{}),user:c.user.displayName,userName:named(c.user.email)===c.user.email?'':named(c.user.email),...(c.role==='owner'?{ownerName:c.w.owner_name??''}:{}),clients:cl.results.map((record:any)=>{if(c.role==='owner')return record;const profile=JSON.parse(record.profile||'{}');delete profile.drive_folder_url;if(scoped)delete profile.links;return {...record,profile:JSON.stringify(profile)};}),posts:p.results.map((post:any)=>({...post,buffer:jobs.results.find((job:any)=>job.post_id===post.id)??null})), comments:co.results.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),members:m.results.map((x:any)=>x.role==='collaborator'?{...x,client_ids:[x.client_id,...extraMarks.filter((e:any)=>e.email===x.email&&e.client_id!==x.client_id).map((e:any)=>e.client_id)]}:x),reviews:history.results.map((x:any)=>({...x,actor:named(x.actor)})),keyDates:keyDates.results,...projectData,projectComments:projectData.projectComments.map((x:any)=>({...x,author:named(x.author),mine:!preview&&String(x.author).toLowerCase()===c.user.email.toLowerCase()})),projectReviews:projectData.projectReviews.map((x:any)=>({...x,actor:named(x.actor)})),...(c.role==='owner'||c.role==='team'||client?{projectNotes:projectNotes.map((x:any)=>({...x,author:named(x.author)}))}:{}),...(week?week:{}),...labs,...(c.role==='owner'?{projectNoteViews:noteViews.map((x:any)=>({...x,name:named(x.email)}))}:{})},{headers:{'Cache-Control':'no-store'}});
 }
 function str(x:any,max=5000){return typeof x==='string'?x.trim().slice(0,max):'';}
 async function POST(req:Request){
@@ -78,7 +82,7 @@ async function POST(req:Request){
  let b:any;try{b=await req.json();}catch{return fail('Datos no válidos.');}
  if(!b||typeof b!=='object')return fail('Datos no válidos.');
  const extra:any={};
- if(preview&&!['review','comment','resolveComments','taskComment','taskReview','taskSent'].includes(b.action))return fail('Desde la vista de cliente solo puedes comentar, revisar o marcar tareas como enviadas.',403);
+ if(preview&&!['review','comment','resolveComments','taskComment','taskReview','taskSent','selectionAnswer','ideaApprove'].includes(b.action))return fail('Desde la vista de cliente solo puedes comentar, revisar o marcar tareas como enviadas.',403);
  if(b.action==='init'){
   if(c.user.email!==env.ADMIN_EMAIL?.trim().toLowerCase())return fail('Solo el administrador configurado puede crear el espacio.',403);
   if(c.w)return fail('El espacio ya está configurado.',409);
@@ -94,10 +98,11 @@ async function POST(req:Request){
  if(noteActions.includes(b.action))return noteAction(env,{db:c.db,role:c.role,preview:!!preview,clientIds:own?.projects??[],user:c.user},b);
  if(weekActions.includes(b.action)){const r=await weekAction({db:c.db,role:c.role,preview:!!preview},b);return r??Response.json({ok:true});}
  if(projectActions.includes(b.action)){const r=await projectAction({db:c.db,role:c.role,clientIds:own?.projects??[],perms:c.perms,user:c.user,preview:!!preview},b);return r??Response.json({ok:true});}
+ if(labsActions.includes(b.action)){if(own&&!soc.length)return fail('Tu acceso no incluye redes sociales.',403);if(collaborator)return fail('Labs es de solo lectura para colaboradores.',403);return (await labsAction({db:c.db,role:c.role,staff,preview:!!preview,social:soc,user:c.user},b))??Response.json({ok:true});}
  if(['post','review','comment','delete','editComment','resolveComments'].includes(b.action)&&own&&!soc.length)return fail('Tu acceso no incluye redes sociales.',403);
  if(b.action==='resolveComments'){
   const post=await c.db.prepare('SELECT id,client_id,status,client_changed_at FROM posts WHERE id=?').bind(str(b.id,100)).first<any>();
-  if(!post||!staff&&(!soc.includes(post.client_id)||c.role==='client'&&['Idea','Borrador'].includes(post.status)))return fail('Publicación no encontrada.',404);
+  if(!post||!staff&&(!soc.includes(post.client_id)||c.role==='client'&&clientHides(post)))return fail('Publicación no encontrada.',404);
   await c.db.prepare(`UPDATE comments SET resolved=1 WHERE post_id=? AND internal=0 AND resolved=0${staff?'':' AND created_at>?'}`).bind(post.id,...(staff?[]:[post.client_changed_at??''])).run();
   return Response.json({ok:true});
  }
@@ -189,7 +194,7 @@ async function POST(req:Request){
   if(b.id&&!existing)return fail('Publicación no encontrada.',404);
   if(collaborator&&((existing&&!soc.includes(existing.client_id))||(b.action==='post'&&!soc.includes(b.client_id))))return fail('Sin permiso.',403);
   if(existing&&['post','review'].includes(b.action)&&existing.updated_at!==b.updated_at)return fail('La publicación ha cambiado. Actualiza antes de continuar.',409);
-  if(existing&&c.role==='client'&&(!soc.includes(existing.client_id)||['Idea','Borrador'].includes(existing.status)))return fail('Sin permiso.',403);
+  if(existing&&c.role==='client'&&(!soc.includes(existing.client_id)||clientHides(existing)))return fail('Sin permiso.',403);
   if(b.action==='comment'){
    const body=str(b.body),internal=b.internal===true;if(!body)return fail('Escribe un comentario.');if(internal&&!can('internal_notes'))return fail('Solo el equipo puede dejar notas internas.',403);
    const result=await c.db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved,internal) SELECT ?,?,?,?,?,?,0,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND client_id=? AND client_changed_at=?)').bind(crypto.randomUUID(),existing.id,c.user.displayName,body,new Date().toISOString(),c.role==='client'&&!preview?'client':'team',internal?1:0,existing.id,existing.client_id,existing.client_changed_at??'').run();if(!result.meta.changes)return fail('La publicación ha cambiado de cliente. Actualiza antes de comentar.',409);
@@ -227,26 +232,28 @@ async function POST(req:Request){
   }else{
    if(!can('posts_edit'))return fail(collaborator?'Tu acceso no permite crear ni editar publicaciones.':'Solo el equipo puede editar contenidos.',403);
    const music=b.channel==='Instagram'&&b.format==='Reel'&&!!b.buffer_music?1:0,title=str(b.title,160),copy=str(b.copy,15000),asset=materialLinks(str(b.asset,42000)).join('\n'),date=str(b.date,16);
-   if(!title||!channels.includes(b.channel)||!formats.includes(b.format)||!statuses.includes(b.status)||(date?(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))):!['Idea','Borrador'].includes(b.status)))return fail('Revisa título, fecha, canal y formato.');
+   if(!title||!channels.includes(b.channel)||!formats.includes(b.format)||!statuses.includes(b.status)||(date?(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))):!['Idea','Idea aprobada','Borrador'].includes(b.status)))return fail('Revisa título, fecha, canal y formato.');
    if(date&&new Date(date+'Z').toISOString().slice(0,16)!==date)return fail('La fecha no existe. Revisa el día y la hora.');
    if(!allowedFormats[b.channel]?.includes(b.format))return fail('El formato no corresponde a esta plataforma.');
    if(existing?.status==='Publicado')return fail('Las publicaciones publicadas se conservan. Crea una nueva versión para modificarlas.');
    if(typeof b.asset==='string'&&b.asset.length>42000)return fail('Los enlaces de material son demasiado largos.');const materialError=validateMaterial(asset,b.format);if(materialError)return fail(materialError);
    if(!await c.db.prepare('SELECT id FROM clients WHERE id=? AND archived=0').bind(str(b.client_id)).first())return fail('Selecciona un cliente activo.');
    const reassign=!!existing&&existing.client_id!==b.client_id;
+   let campaignId=reassign?'':str(b.campaign_id,100),momentId=reassign?'':str(b.moment_id,100);
+   if(campaignId){const camp=await c.db.prepare('SELECT client_id FROM campaigns WHERE id=?').bind(campaignId).first<any>();if(!camp||camp.client_id!==b.client_id)return fail('La campaña elegida no corresponde a este cliente.');if(momentId&&!await c.db.prepare('SELECT id FROM campaign_moments WHERE id=? AND campaign_id=?').bind(momentId,campaignId).first())return fail('El momento elegido no pertenece a la campaña.');}else momentId='';
    if(reassign&&c.role!=='owner')return fail('Solo el administrador puede cambiar el cliente de una publicación.',403);
    if(reassign&&await c.db.prepare('SELECT post_id FROM buffer_jobs WHERE post_id=?').bind(existing.id).first())return fail('Esta publicación tiene un envío registrado en Buffer. Crea una nueva versión para asignarla a otro cliente.',409);
    if(existing){const buffer=await c.db.prepare('SELECT state FROM buffer_jobs WHERE post_id=?').bind(existing.id).first<{state:string}>();if(buffer&&lockedBufferStates.includes(buffer.state))return fail('Cancela o resuelve el envío en Buffer antes de editar esta publicación.',409);}
    const changed=existing&&['title','copy','channel','format','date','asset'].some(k=>existing[k]!==({title,copy,date,asset,channel:b.channel,format:b.format} as any)[k]);
-   const status=reassign?(existing.status==='Idea'?'Idea':'Borrador'):changed&&['Aprobado','Planificado','Publicado'].includes(existing.status)?'En revisión':b.status;
+   const status=reassign?(['Idea','Idea aprobada'].includes(existing.status)?existing.status:'Borrador'):changed&&['Aprobado','Planificado','Publicado'].includes(existing.status)?'En revisión':b.status;
    if(!existing&&['Aprobado','Planificado','Publicado'].includes(status))return fail('Crea el borrador y envíalo a revisión antes de aprobarlo.');
    if(existing&&['Aprobado','Planificado','Publicado'].includes(status)&&!['Aprobado','Planificado','Publicado'].includes(existing.status))return fail('Aprueba el contenido desde la revisión.');
    if(collaborator&&['Aprobado','Planificado','Publicado'].includes(status))return fail('El colaborador puede preparar y enviar contenido a revisión.',403);
    if(status==='En revisión'&&b.status==='En revisión'&&existing?.status!=='En revisión'&&!can('posts_send'))return fail('Tu acceso no permite enviar publicaciones a revisión.',403);
    const changedAt=new Date().toISOString();
    const now=changedAt+':'+crypto.randomUUID();
-   if(existing){const r=await c.db.prepare(`UPDATE posts SET title=?,copy=?,channel=?,format=?,date=?,status=?,asset=?,updated_at=?,client_id=?,client_changed_at=?,buffer_music=? WHERE id=? AND updated_at=? AND (?=0 OR NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id)) AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')}))`).bind(title,copy,b.channel,b.format,date,status,asset,now,b.client_id,reassign?changedAt:existing.client_changed_at??'',music,existing.id,b.updated_at,reassign?1:0).run();if(!r.meta.changes)return fail('Otra persona ha actualizado esta publicación. Recarga para ver los cambios.',409);}
-   else await c.db.prepare('INSERT INTO posts(id,client_id,title,copy,channel,format,date,status,asset,updated_at,buffer_music) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),b.client_id,title,copy,b.channel,b.format,date,status,asset,now,music).run();
+   if(existing){const r=await c.db.prepare(`UPDATE posts SET title=?,copy=?,channel=?,format=?,date=?,status=?,asset=?,updated_at=?,client_id=?,client_changed_at=?,buffer_music=?,campaign_id=?,moment_id=?,shared=? WHERE id=? AND updated_at=? AND (?=0 OR NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id)) AND NOT EXISTS (SELECT 1 FROM buffer_jobs WHERE post_id=posts.id AND state IN (${lockedBufferStates.map(s=>"'"+s+"'").join(',')}))`).bind(title,copy,b.channel,b.format,date,status,asset,now,b.client_id,reassign?changedAt:existing.client_changed_at??'',music,campaignId,momentId,campaignId&&!reassign&&['Idea','Idea aprobada'].includes(status)?existing.shared:0,existing.id,b.updated_at,reassign?1:0).run();if(!r.meta.changes)return fail('Otra persona ha actualizado esta publicación. Recarga para ver los cambios.',409);}
+   else await c.db.prepare('INSERT INTO posts(id,client_id,title,copy,channel,format,date,status,asset,updated_at,buffer_music,campaign_id,moment_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),b.client_id,title,copy,b.channel,b.format,date,status,asset,now,music,campaignId,momentId).run();
   }
  }else return fail('Acción desconocida.');
  return Response.json({ok:true,...extra});
