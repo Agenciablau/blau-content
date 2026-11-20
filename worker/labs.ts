@@ -1,4 +1,4 @@
-import {normalizeCampaign,normalizeSelection,applyAnswer,readSelection} from '../shared/labs';
+import {normalizeCampaign,normalizeSelection,applyAnswer,readSelection,hasElements} from '../shared/labs';
 type Ctx={db:D1Database;role:string;staff:boolean;preview:boolean;social:string[];user:{email:string;displayName:string}};
 const fail=(error:string,status=400)=>Response.json({error},{status});
 const str=(x:any,max=5000)=>typeof x==='string'?x.trim().slice(0,max):'';
@@ -65,10 +65,10 @@ export async function labsAction(c:Ctx,b:any):Promise<Response|null>{
  if(c.role!=='client')return fail('Esta acción corresponde al cliente.',403);
  if(post.status!=='Idea'||!post.campaign_id||!await db.prepare("SELECT id FROM campaigns WHERE id=? AND status<>'draft'").bind(post.campaign_id).first())return fail('Esta idea no está pendiente de tu respuesta.',403);
  if(b.action==='selectionAnswer'){
-  if(!sel)return fail('Esta idea no tiene opciones para elegir.');
+  if(!sel||!hasElements(sel))return fail('Esta idea no tiene opciones para elegir.');
   let n;try{n=applyAnswer(sel,b,()=>crypto.randomUUID());}catch(e){return fail(e instanceof Error?e.message:'Revisa tu respuesta.');}
   return run([db.prepare("UPDATE posts SET selection=?,updated_at=? WHERE id=? AND updated_at=? AND status='Idea'").bind(JSON.stringify(n),v,post.id,post.updated_at),comment(str(b.body),'client')]);
  }
- if(sel&&sel.options.length)return fail('Esta idea tiene opciones: responde eligiendo tus favoritas.');
+ if(hasElements(sel))return fail('Esta idea tiene opciones: responde eligiendo tus favoritas.');
  return run([db.prepare("UPDATE posts SET status='Idea aprobada',updated_at=? WHERE id=? AND updated_at=? AND status='Idea'").bind(v,post.id,post.updated_at),comment(str(b.body),'client')]);
 }
