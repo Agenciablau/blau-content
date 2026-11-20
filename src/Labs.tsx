@@ -1,6 +1,6 @@
 import {useMemo,useState} from 'react';
 import SlideIndicator from './SlideIndicator';
-import {FlaskConical,Plus,X,Send,Check,CheckCheck,Trash2,ChevronLeft,ChevronRight,Pencil,Hourglass,Lock,ChevronDown} from 'lucide-react';
+import {FlaskConical,Plus,X,Send,Check,CheckCheck,Trash2,ChevronLeft,ChevronRight,Pencil,Hourglass,Lock,ChevronDown,ListChecks,CalendarClock} from 'lucide-react';
 import {campaignStatuses,readSelection,hasElements} from '../shared/labs';
 import type {Option,Moment,Objective,Selection} from '../shared/labs';
 import {commitmentCategories,readClientProfile} from '../shared/client-profile';
@@ -110,6 +110,11 @@ function CampaignEditor({camp,moments,clients,clientId,owner,busy,error,onCancel
   {camp&&owner&&<section className="lb-card static lb-danger"><h2>Eliminar campaña</h2><p className="lb-sub">Las ideas y publicaciones se conservan, pero dejan de pertenecer a la campaña.</p>{del?<div className="lb-erow"><input aria-label="Nombre exacto" placeholder={`Escribe «${camp.name}» para confirmar`} value={confirm} onChange={e=>setConfirm(e.target.value)}/><button type="button" className="secondary-btn" disabled={busy||confirm!==camp.name} onClick={()=>onDelete(confirm)}><Trash2 size={15}/>Eliminar</button></div>:<button type="button" className="secondary-btn" onClick={()=>setDel(true)}><Trash2 size={15}/>Eliminar campaña…</button>}</section>}
  </form>;
 }
+/** Lo que el cliente tiene que hacer, en grande: es lo primero que debe entender. */
+function Task({q,how,deadline,done,of}:{q:string;how:string;deadline?:string;done?:number;of?:number}){
+ return <div className="lb-task" role="note"><span className="lb-task-eyebrow"><Hourglass size={13}/>Lo que necesitamos de ti</span><p className="lb-task-q">{q}</p>
+  <div className="lb-task-meta"><span><ListChecks size={15}/>{how}</span>{deadline&&<span><CalendarClock size={15}/>Responde antes del {fmtD(deadline)}</span>}{of!=null&&<span className={'lb-task-count'+(done===of?' full':'')}>{done} de {of}</span>}</div></div>;
+}
 /** Formulario de la idea: explicación y, si hace falta, elementos genéricos a elegir (productos, temas, titulares…) con el nombre que decida el equipo. */
 export type IdeaForm={mode:'team'|'client';ask_link:boolean;explanation:string;label:string;question:string;pick:number;allow_add:boolean;deadline:string;options:{id?:string;text:string;note:string}[]};
 export const ideaForm=(sel:Selection|null):IdeaForm=>({mode:sel?.mode??'team',ask_link:sel?.ask_link??false,explanation:sel?.explanation??'',label:sel?.label&&sel.label!=='Opciones'?sel.label:'',question:sel?.question??'',pick:sel?.pick??3,allow_add:sel?.allow_add??true,deadline:sel?.deadline??'',options:(sel?.options??[]).filter(o=>o.by==='team').map(o=>({id:o.id,text:o.text,note:o.note}))});
@@ -159,13 +164,13 @@ export function IdeaPanel({post,data,staff,busy,act}:{post:any;data:any;staff:bo
  if(post.status==='Idea aprobada')return <section className="lb-panel ok" aria-label="Labs">{tag}{explain}<div className="lb-note"><CheckCheck size={18}/><div><b>Idea aprobada</b><span>Gracias, vamos a producir la pieza y te la enseñaremos para que la apruebes.</span></div></div>{sel&&sel.options.filter(o=>sel.final.includes(o.id)).map(o=>optLine({...o,chosen:true}))}</section>;
  const toggle=(id:string)=>setChosen(chosen.includes(id)?chosen.filter(x=>x!==id):[...chosen,id]);
  if(sel&&sel.mode==='client'){const filled=slots.filter(o=>o.text.trim()).length,setS=(i:number,p:any)=>setSlots(slots.map((x,k)=>k===i?{...x,...p}:x));
-  return <section className="lb-panel" aria-label="Labs">{tag}{explain}<div className="lb-sel"><div className="lb-callout slim"><Hourglass size={18}/><div><b>Esto es lo que necesitamos de ti</b><span>{sel.question}{sel.deadline?` · responde antes del ${fmtD(sel.deadline)}`:''}</span></div><span className="lb-pill">{filled} de {sel.pick}</span></div>
+  return <section className="lb-panel" aria-label="Labs">{tag}{explain}<div className="lb-sel"><Task q={sel.question} how={`Rellena ${sel.pick===1?'el espacio':`los ${sel.pick} espacios`}${sel.ask_link?' (el enlace es opcional)':''}`} deadline={sel.deadline} done={filled} of={sel.pick}/>
    {slots.map((o,i)=><div className="lb-slot" key={i}><span className="lb-num">{i+1}</span><div className="lb-slot-f"><input aria-label={`${label} ${i+1}`} maxLength={120} placeholder={`${label} ${i+1} de ${sel.pick}`} value={o.text} onChange={e=>setS(i,{text:e.target.value})}/>{sel.ask_link&&<input type="text" inputMode="url" aria-label={`Enlace de ${label} ${i+1}`} maxLength={500} placeholder="Enlace (opcional)" value={o.link} onChange={e=>setS(i,{link:e.target.value})}/>}</div></div>)}
    <label className="lb-lbl">Comentario para Blau (opcional)<textarea rows={2} maxLength={5000} value={body} onChange={e=>setBody(e.target.value)} placeholder="Cuéntanos lo que quieras añadir…"/></label>
    {answered&&<p className="lb-sub">Ya respondiste. Puedes cambiar tus respuestas hasta que el equipo las apruebe.</p>}
    <button className="primary" disabled={busy||filled!==sel.pick} onClick={()=>act({action:'selectionAnswer',...base,chosen:[],mine:slots.map(o=>({id:o.id,text:o.text,link:o.link,chosen:true})),body},'Respuesta enviada')}><Send size={15}/>{answered?'Actualizar mi respuesta':'Enviar mi respuesta'}</button></div></section>;}
  return <section className="lb-panel" aria-label="Labs">{tag}{explain}
-  {sel&&hasOpts?<div className="lb-sel"><div className="lb-callout slim"><Hourglass size={18}/><div><b>Esta idea la decidimos juntos</b><span>{sel.question} (elige hasta {sel.pick}{sel.allow_add?' y añade los tuyos si falta alguno':''}{sel.deadline?` · responde antes del ${fmtD(sel.deadline)}`:''})</span></div><span className="lb-pill">{total} de {sel.pick}</span></div>
+  {sel&&hasOpts?<div className="lb-sel"><Task q={sel.question} how={`Elige hasta ${sel.pick}${sel.allow_add?' o propón los tuyos si falta alguno':''}`} deadline={sel.deadline} done={total} of={sel.pick}/>
    {sel.mode!=='client'&&<h3 className="lb-h3">{label}</h3>}
    {sel.options.filter(o=>o.by==='team').map(o=><button type="button" key={o.id} className={'lb-opt btn'+(chosen.includes(o.id)?' on':'')} aria-pressed={chosen.includes(o.id)} onClick={()=>toggle(o.id)}><span className="lb-radio">{chosen.includes(o.id)&&<Check size={13}/>}</span><div><b>{o.text}</b>{o.note&&<small>{o.note}</small>}</div><span className="lb-by team">Propuesta de Blau</span></button>)}
    {sel.allow_add&&<><h3 className="lb-h3">Tus propuestas</h3>{mine.map((o,i)=><div key={o.id??i} className={'lb-opt mine'+(o.chosen?' on':'')}><button type="button" className="lb-radio" aria-label={o.chosen?'Quitar de mis elegidas':'Elegir'} onClick={()=>setMine(mine.map((x,k)=>k===i?{...x,chosen:!x.chosen}:x))}>{o.chosen&&<Check size={13}/>}</button><div><b>{o.text}</b>{o.link&&<a className="lb-link" href={o.link} target="_blank" rel="noopener noreferrer">{o.link.replace(/^https?:\/\//,'')}</a>}</div><span className="lb-by client">Tuya</span><button type="button" className="icon-btn" aria-label="Quitar mi propuesta" onClick={()=>setMine(mine.filter((_,k)=>k!==i))}><X size={15}/></button></div>)}
@@ -173,6 +178,6 @@ export function IdeaPanel({post,data,staff,busy,act}:{post:any;data:any;staff:bo
    <label className="lb-lbl">Comentario para Blau (opcional)<textarea rows={2} maxLength={5000} value={body} onChange={e=>setBody(e.target.value)} placeholder="Cuéntanos qué te convence o qué cambiarías…"/></label>
    {answered&&<p className="lb-sub">Ya respondiste. Puedes cambiar tu elección hasta que el equipo la apruebe.</p>}
    <button className="primary" disabled={busy||!total||total>sel.pick} onClick={()=>act({action:'selectionAnswer',...base,chosen,mine:mine.map(o=>({id:o.id,text:o.text,link:o.link,chosen:o.chosen})),body},'Respuesta enviada')}><Send size={15}/>{answered?'Actualizar mi respuesta':'Enviar mi respuesta'}</button></div>
-  :<div className="lb-sel"><div className="lb-callout slim"><Hourglass size={18}/><div><b>Esta idea espera tu aprobación</b><span>Si te gusta, apruébala y la producimos. Si quieres cambiar algo, cuéntanoslo en la conversación.</span></div></div><button className="primary" disabled={busy} onClick={()=>act({action:'ideaApprove',...base},'Idea aprobada')}><CheckCheck size={16}/>Aprobar idea</button></div>}
+  :<div className="lb-sel"><Task q="¿Te gusta esta idea? Si es así, apruébala y la producimos." how="Si quieres cambiar algo, cuéntanoslo en la conversación"/><button className="primary" disabled={busy} onClick={()=>act({action:'ideaApprove',...base},'Idea aprobada')}><CheckCheck size={16}/>Aprobar idea</button></div>}
  </section>;
 }
