@@ -5,6 +5,8 @@ export type Metric={name:string;value:string};
 export type Moment={id:string;name:string;description:string;start:string;end:string;budget:number};
 export type Option={id:string;text:string;note:string;link:string;by:'team'|'client';chosen:boolean};
 export type Selection={mode:'team'|'client';ask_link:boolean;explanation:string;label:string;question:string;pick:number;allow_add:boolean;deadline:string;options:Option[];final:string[];answered_at:string};
+/** Origen del material de una publicación: ya lo tiene el equipo, hay que crearlo o se saca de las marcas. */
+export const materialSources=[['have','Ya lo tengo'],['create','Hay que crearlo'],['brand','Lo saco de las marcas']] as const;
 const isDate=(v:unknown)=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&new Date(v+'T00:00Z').toISOString().slice(0,10)===v;
 const text=(v:unknown,max:number,msg:string,required=false)=>{if(v==null)v='';if(typeof v!=='string'||v.length>max)throw Error(msg);const t=v.trim();if(required&&!t)throw Error(msg);return t;};
 const money=(v:unknown,msg:string)=>{const n=v===''||v==null?0:Number(v);if(!Number.isInteger(n)||n<0||n>10000000)throw Error(msg);return n;};
@@ -28,6 +30,14 @@ export function normalizeCampaign(raw:any,newId:()=>string){
 }
 /** Hay algo que elegir: elementos del equipo o, si los propone el cliente, un espacio para sus propuestas. */
 export const hasElements=(s:Selection|null)=>!!s&&(s.mode==='client'||s.options.length>0);
+/** Origen del material y fecha de creación (solo si hay que crearlo, y nunca después de la publicación). */
+export function normalizeMaterial(rawMaterial:unknown,rawDate:unknown,postDate:string){
+ const material=materialSources.some(s=>s[0]===rawMaterial)?rawMaterial as string:'';
+ const d=material==='create'&&typeof rawDate==='string'?rawDate.trim():'';
+ if(d&&!isDate(d))throw Error('La fecha de creación no es válida.');
+ if(d&&postDate&&d>postDate.slice(0,10))throw Error('La fecha de creación no puede ser posterior a la publicación.');
+ return {material,create_date:d};
+}
 export function readSelection(v:unknown):Selection|null{
  const s=parseJson<any>(v,null);
  if(!s||typeof s!=='object'||!Array.isArray(s.options))return null;
