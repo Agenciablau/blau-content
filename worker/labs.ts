@@ -1,9 +1,9 @@
-import {normalizeCampaign,normalizeSelection,applyAnswer,readSelection,hasElements} from '../shared/labs';
+import {normalizeCampaign,normalizeSelection,normalizeMaterial,applyAnswer,readSelection,hasElements} from '../shared/labs';
 type Ctx={db:D1Database;role:string;staff:boolean;preview:boolean;social:string[];user:{email:string;displayName:string}};
 const fail=(error:string,status=400)=>Response.json({error},{status});
 const str=(x:any,max=5000)=>typeof x==='string'?x.trim().slice(0,max):'';
 const marks=(ids:string[])=>`IN (${ids.map(()=>'?').join(',')||'NULL'})`;
-export const labsActions=['campaign','deleteCampaign','selectionSave','selectionAnswer','selectionApprove','ideaApprove'];
+export const labsActions=['campaign','deleteCampaign','postMaterial','selectionSave','selectionAnswer','selectionApprove','ideaApprove'];
 /** Equipo: todas las campañas. Cliente y colaborador: las de su marca que no están en borrador, con presupuesto y resultados solo si el equipo los muestra. */
 export async function loadLabs(db:D1Database,staff:boolean,social:string[]){
  const rows=(await db.prepare(staff?'SELECT * FROM campaigns ORDER BY created_at':`SELECT * FROM campaigns WHERE status<>'draft' AND client_id ${marks(social)} ORDER BY created_at`).bind(...(staff?[]:social)).all<any>()).results;
@@ -49,8 +49,9 @@ export async function labsAction(c:Ctx,b:any):Promise<Response|null>{
  const v=version(),sel=readSelection(post.selection);
  const comment=(body:string,role:string)=>body?db.prepare('INSERT INTO comments(id,post_id,author,body,created_at,role,resolved) SELECT ?,?,?,?,?,?,0 WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND updated_at=?)').bind(crypto.randomUUID(),post.id,c.user.displayName,body,now,role,post.id,v):null;
  const run=async(ops:(D1PreparedStatement|null)[])=>{const r=await db.batch(ops.filter(Boolean) as D1PreparedStatement[]);return r[0].meta.changes?null:fail('La publicación ha cambiado. Actualiza antes de continuar.',409);};
- if(['selectionSave','selectionApprove'].includes(b.action)){
+ if(['postMaterial','selectionSave','selectionApprove'].includes(b.action)){
   if(!c.staff||c.preview)return fail('Solo el equipo puede hacerlo.',403);
+  if(b.action==='postMaterial'){let m;try{m=normalizeMaterial(b.material,b.create_date,post.date??'');}catch(e){return fail(e instanceof Error?e.message:'Revisa el material.');}return run([db.prepare('UPDATE posts SET material=?,create_date=?,updated_at=? WHERE id=? AND updated_at=?').bind(m.material,m.create_date,v,post.id,post.updated_at)]);}
   if(b.action==='selectionSave'){
    if(post.status!=='Idea')return fail('La idea solo se edita mientras la pieza es una idea.');
    let n;try{n=normalizeSelection(b.selection,sel,()=>crypto.randomUUID());}catch(e){return fail(e instanceof Error?e.message:'Revisa la idea.');}
