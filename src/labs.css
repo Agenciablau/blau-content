@@ -133,3 +133,5 @@ html body .lb-final{flex-direction:row!important;align-items:center}.lb-final in
 .pf-block{display:flex;flex-direction:column;gap:12px;padding:16px 0 0;border-top:1px solid var(--blau-line,#e3e9ee)}.pf-block:first-child{border-top:0;padding-top:0}
 .pf-block>h4{margin:0;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blau-navy,#003680)}
 .pf-block>.lb-collapse{margin:0}.pf-block>.form-grid,.pf-block>.form-row{margin:0}
+.lb-prow .lb-date{flex-direction:row!important;align-items:center!important;gap:8px}.lb-prow .lb-date>span:first-child{flex:none;white-space:nowrap}.lb-prow .halo-trigger{min-height:38px;font-size:13px}.lb-prow .halo-thumb{width:26px;height:26px}
+.lb-prow .lb-date .halo-trigger{min-height:38px;font-size:13px}.lb-prow .lb-date .halo-thumb{width:26px;height:26px}
