@@ -105,11 +105,12 @@ function Production({posts,busy,mutate,onOpenPost}:{posts:any[];busy:boolean;mut
     {p.material==='create'?<label className="lb-date"><span>Crear el</span><input type="date" aria-label="Fecha de creación" max={pubDay(p)||undefined} value={p.create_date||''} disabled={busy} onChange={e=>set(p,'create',e.target.value)}/></label>:<span className="lb-date none"/>}</div>)}</div>;})}
   {!posts.length&&<p className="lb-empty">Todavía no hay piezas en esta campaña.</p>}</section>;
 }
-export function MaterialFields({material,createDate,pubDate,onChange}:{material:string;createDate:string;pubDate:string;onChange:(m:string,d:string)=>void}){
- return <fieldset className="lb-formset"><legend><Clapperboard size={14}/>Material</legend>
+export function MaterialFields({material,createDate,pubDate,onChange,bare}:{material:string;createDate:string;pubDate:string;onChange:(m:string,d:string)=>void;bare?:boolean}){
+ const Wrap:any=bare?'div':'fieldset',Head:any=bare?'b':'legend';
+ return <Wrap className={bare?'lb-sub':'lb-formset'}><Head className={bare?'lb-sub-title':undefined}><Clapperboard size={14}/>Material</Head>
   <div className="segmented lb-who" role="tablist" aria-label="Origen del material"><SlideIndicator active={material}/>{materialSources.map(m=><button type="button" key={m[0]} role="tab" aria-selected={material===m[0]} className={material===m[0]?'active':''} onClick={()=>onChange(material===m[0]?'':m[0],material===m[0]||m[0]!=='create'?'':createDate)}>{m[1]}</button>)}</div>
   {material==='create'&&<label className="lb-lbl">Fecha para crear el material<input type="date" max={pubDate?pubDate.slice(0,10):undefined} value={createDate} onChange={e=>onChange('create',e.target.value)}/></label>}
-  <small>{material==='create'?'Aparecerá en Labs > Producción y en su calendario de creación.':material?'No hace falta producirlo.':'Opcional. Vuelve a pulsar la opción elegida para quitarla.'}</small></fieldset>;
+  <small>{material==='create'?'Aparecerá en Labs > Producción y en su calendario de creación.':material?'No hace falta producirlo.':'Opcional. Vuelve a pulsar la opción elegida para quitarla.'}</small></Wrap>;
 }
 function CampaignEditor({camp,moments,clients,clientId,owner,busy,error,onCancel,onSave,onDelete}:{camp:any;moments:Moment[];clients:any[];clientId:string;owner:boolean;busy:boolean;error:string;onCancel:()=>void;onSave:(b:any)=>void;onDelete:(name:string)=>void}){
  const [f,setF]=useState(()=>({client_id:camp?.client_id??(clientId!=='all'?clientId:clients[0]?.id??''),name:camp?.name??'',concept:camp?.concept??'',status:camp?.status??'draft',budget:String(camp?.budget??0),spent:String(camp?.spent??0),show_numbers:!!camp?.show_numbers,objectives:parseJson<Objective[]>(camp?.objectives,[]),moments:moments.length?moments.map(m=>({...m,budget:String(m.budget)})):[{id:'',name:'',description:'',start:'',end:'',budget:'0'}]}));
