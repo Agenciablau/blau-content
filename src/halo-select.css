@@ -1,6 +1,7 @@
 /* Desplegable Halo (src/HaloSelect.tsx): borde degradado animado, relleno esmerilado, etiqueta escalonada y lista con entrada escalonada. */
 .halo{position:relative;display:block;width:100%;min-width:0;border-radius:12px;padding:1px;isolation:isolate}
-.halo-native{position:absolute;left:50%;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;padding:0;border:0;min-height:0}
+/* Control nativo oculto: siempre 1px, aunque otras reglas (p. ej. móvil) pongan width:100% en select o input. */
+.halo .halo-native{position:absolute;left:0!important;bottom:0;width:1px!important;min-width:0!important;max-width:1px!important;height:1px!important;min-height:0!important;max-height:1px!important;opacity:0;pointer-events:none;padding:0!important;margin:0!important;border:0!important;flex:none!important;overflow:hidden;-webkit-appearance:none;appearance:none;font-size:1px}
 .halo-rim{position:absolute;inset:0;border-radius:12px;overflow:hidden;z-index:-1;background:#e3edf3;opacity:.62;transition:opacity .25s ease}
 .halo.open .halo-rim,.halo:focus-within .halo-rim{opacity:.9}
 .halo-rim i{position:absolute;bottom:-14px;left:0;border-radius:50%;filter:blur(14px);will-change:transform}
