@@ -48,3 +48,16 @@
 .lb-date .halo{flex:1;min-width:0}.lb-date .halo-trigger{min-height:34px;font-size:12px}.lb-date .halo-thumb{width:24px;height:24px}
 .lb-erow.m>.halo{flex:1 1 220px;width:auto;min-width:0}
 @media(max-width:600px){.date-filter-fields>.halo{grid-column:1/-1;width:100%}}
+/* Selector de hora (src/TimePicker.tsx) */
+.tp-pop{width:min(280px,calc(100vw - 16px))}
+.tp-head{align-items:flex-start}.tp-big{display:flex;align-items:baseline;font-size:34px!important;font-weight:700!important;line-height:1.1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.tp-big span{display:inline-block;animation:dp-pop .25s cubic-bezier(.3,1.6,.5,1)}.tp-big i{font-style:normal;padding:0 2px;color:#13dbfb;animation:tp-blink 1.6s ease-in-out infinite}
+.tp-tz{font-size:10px!important;letter-spacing:0!important;text-transform:none!important;font-weight:500!important}
+.tp-cols{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:4px}
+.tp-col{height:176px;overflow-y:auto;scroll-snap-type:y proximity;display:flex;flex-direction:column;gap:2px;padding:4px;border-radius:12px;background:#f5f8fa;scrollbar-width:thin;-webkit-mask:linear-gradient(transparent,#000 14%,#000 86%,transparent);mask:linear-gradient(transparent,#000 14%,#000 86%,transparent)}
+.tp-col button{all:unset;flex:none;scroll-snap-align:center;height:34px;display:grid;place-items:center;border-radius:9px;font-size:14px;font-variant-numeric:tabular-nums;color:#37475a;cursor:pointer;transition:background-color .15s ease,color .15s ease,transform .15s ease}
+.tp-col button:hover{background:rgba(19,219,251,.16);color:#003680}
+.tp-col button.on{background:#003680;color:#fff;font-weight:700;box-shadow:0 4px 12px -4px #003680;animation:dp-pop .25s cubic-bezier(.3,1.6,.5,1)}
+.tp-pop .dp-chip{padding:6px 9px}
+@keyframes tp-blink{50%{opacity:.35}}
+@media(prefers-reduced-motion:reduce){.tp-big span,.tp-big i,.tp-col button.on{animation:none!important}}
