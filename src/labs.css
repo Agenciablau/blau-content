@@ -107,10 +107,10 @@ html body .lb-final{flex-direction:row!important;align-items:center}.lb-final in
 .lb-undated .lb-pc{flex-direction:row;align-items:center;gap:8px}.lb-undated .lb-pc-t{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:979px){.lb-pc>*{display:none}}
 
-.lb-prod{gap:14px}.lb-prow{display:flex;align-items:center;gap:10px;border-top:1px solid var(--ap-sep)}.lb-prow .lb-item{border-top:0;flex:1;min-width:0}.lb-prow select{flex:none;width:190px}
+.lb-prod{gap:14px}.lb-prow{display:flex;align-items:center;gap:10px;border-top:1px solid var(--ap-sep)}.lb-prow .lb-item{border-top:0;flex:1;min-width:0}.lb-prow select,.lb-prow>.halo{flex:none;width:190px}
 .lb-date{display:flex;align-items:center;gap:6px;flex:none;width:210px;font-size:12px;color:var(--ap-2)}.lb-date input{flex:1;min-width:0}.lb-date.none{visibility:hidden}
 .lb-prod .lb-group>.lb-row{margin-bottom:2px}.lb-prod .lb-group h3{margin:0}
-@media(max-width:979px){.lb-prow{flex-wrap:wrap;padding-bottom:8px}.lb-prow select,.lb-date{width:calc(50% - 5px);flex:1}.lb-date.none{display:none}}
+@media(max-width:979px){.lb-prow{flex-wrap:wrap;padding-bottom:8px}.lb-prow .lb-item{flex:1 1 100%}.lb-prow select,.lb-prow>.halo,.lb-date{width:calc(50% - 5px);flex:1 1 calc(50% - 5px);min-width:0}.lb-date.none{display:none}}
 /* Campaña Labs en la ficha de creación: desplegable que se separa, crece y deja un destello que se apaga. */
 .lb-collapse{position:relative;isolation:isolate;overflow:hidden;border-radius:14px;background:rgba(19,219,251,.08);box-shadow:inset 0 0 0 1px rgba(19,219,251,.3);margin:0 0 14px;transition:margin .45s cubic-bezier(.2,.8,.2,1),box-shadow .45s ease}
 .lb-collapse.open{margin:6px 0 20px;box-shadow:inset 0 0 0 1px rgba(19,219,251,.45),0 8px 24px -14px rgba(0,54,128,.35)}
