@@ -129,3 +129,7 @@ html body .lb-final{flex-direction:row!important;align-items:center}.lb-final in
 @keyframes lb-glow{0%{opacity:0}18%{opacity:1}100%{opacity:0}}
 @media(prefers-reduced-motion:reduce){.lb-collapse,.lb-collapse-icon,.lb-collapse-body,.lb-collapse-inner{transition:none}.lb-collapse-glow{display:none}}
 .lb-sub{display:flex;flex-direction:column;gap:8px;margin-top:6px;padding-top:12px;border-top:1px solid rgba(19,219,251,.3)}.lb-sub:first-child{margin-top:0;padding-top:0;border-top:0}.lb-sub-title{display:flex;gap:6px;align-items:center;font-weight:600;color:var(--ap-tint)}.lb-sub small{color:var(--ap-2)}
+/* Formulario de publicación por bloques. */
+.pf-block{display:flex;flex-direction:column;gap:12px;padding:16px 0 0;border-top:1px solid var(--blau-line,#e3e9ee)}.pf-block:first-child{border-top:0;padding-top:0}
+.pf-block>h4{margin:0;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blau-navy,#003680)}
+.pf-block>.lb-collapse{margin:0}.pf-block>.form-grid,.pf-block>.form-row{margin:0}
