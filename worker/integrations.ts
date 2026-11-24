@@ -72,7 +72,7 @@ export async function integrationApi(request:Request,env:Env,user:User):Promise<
    if(body.action==='reset'){
     if(!['error','cancelled'].includes(job.state))return fail('No repitas un envío activo o sin confirmar.',409);
     const assets=JSON.parse(job.assets);if(assets.length){if(!env.MEDIA)return fail('Conecta R2 para limpiar el intento anterior.');await env.MEDIA.delete(assets.map((a:any)=>a.key));}
-    if(!sendsToBuffer(post.channel,post.format)||post.status!=='Aprobado')return fail('Solo se pueden reintentar publicaciones aprobadas que se envían a Buffer.');await db.prepare("UPDATE buffer_jobs SET state='queued',assets='[]',remote_id=NULL,error='',snapshot=?,updated_at=? WHERE post_id=? AND state IN ('error','cancelled')").bind(JSON.stringify({approvedVersion:post.updated_at}),stamp(),post.id).run();return Response.json({ok:true});
+    if(!sendsToBuffer(post.channel,post.format)||post.no_buffer||post.status!=='Aprobado')return fail('Solo se pueden reintentar publicaciones aprobadas que se envían a Buffer.');await db.prepare("UPDATE buffer_jobs SET state='queued',assets='[]',remote_id=NULL,error='',snapshot=?,updated_at=? WHERE post_id=? AND state IN ('error','cancelled')").bind(JSON.stringify({approvedVersion:post.updated_at}),stamp(),post.id).run();return Response.json({ok:true});
    }
    if(body.action==='confirmPublished'){
     if(job.state!=='notification_sent')return fail('Solo confirma historias publicadas después del aviso al móvil.');
@@ -103,7 +103,7 @@ export async function integrationApi(request:Request,env:Env,user:User):Promise<
 
 async function scheduleStory(env:Env,post:any,client:any,job:any,body:any):Promise<Response>{
  const db=env.DB!;
-  if(client.archived||post.status!=='Aprobado'||!sendsToBuffer(post.channel,post.format))return fail('Esta publicación no se envía a Buffer.');const service=serviceOf(post.channel),linkedin=service==='linkedin';
+  if(client.archived||post.status!=='Aprobado'||post.no_buffer||!sendsToBuffer(post.channel,post.format))return fail('Esta publicación no se envía a Buffer.');const service=serviceOf(post.channel),linkedin=service==='linkedin';
   if(body.updated_at!==post.updated_at)return fail('La publicación cambió. Actualiza antes de enviarla.',409);
   if(job&&job.state!=='queued')return fail('Esta publicación ya tiene un envío registrado. Revisa su estado para evitar duplicados.',409);
   if(body.mode!=='automatic')return fail('Las publicaciones se programan con publicación automática.');
@@ -118,7 +118,7 @@ async function scheduleStory(env:Env,post:any,client:any,job:any,body:any):Promi
   try{
    const token=await driveAccessToken(env);
    for(const link of links){const {thumb,...asset}=await copyDriveFile(env,link,token);assets.push(asset);if(thumb)assets.push({...thumb,mimeType:'image/jpeg',thumb:true});await db.prepare('UPDATE buffer_jobs SET assets=?,updated_at=? WHERE post_id=?').bind(JSON.stringify(assets),stamp(),post.id).run();const pdf=asset.mimeType==='application/pdf';if(linkedin&&post.format==='Carrusel'&&!pdf)throw Error('El carrusel de LinkedIn debe ser un PDF.');if(linkedin&&post.format==='Vídeo'&&!asset.mimeType.startsWith('video/'))throw Error('Este formato requiere un archivo MP4.');if(pdf&&!(linkedin&&post.format==='Carrusel'))throw Error('Los PDF solo se admiten en carruseles de LinkedIn.');if(!linkedin&&post.format==='Carrusel'&&!asset.mimeType.startsWith('image/'))throw Error('El carrusel solo admite imágenes.');if(post.format==='Reel'&&!asset.mimeType.startsWith('video/'))throw Error('Un reel debe tener un archivo MP4.');if(post.format==='Imagen'&&!asset.mimeType.startsWith('image/'))throw Error('Este formato requiere una imagen.');}
-   const thumbUrl=assets.find(a=>a.thumb)?.url;input.assets=assets.filter(a=>!a.thumb).map(a=>a.mimeType==='application/pdf'?{document:{url:a.url,title:post.title.slice(0,100),thumbnailUrl:thumbUrl}}:a.mimeType.startsWith('video/')?{video:{url:a.url}}:{image:{url:a.url}});
+   const thumbUrl=assets.find(a=>a.thumb)?.url;input.assets=assets.filter(a=>!a.thumb).map(a=>a.mimeType==='application/pdf'?{document:{url:a.url,title:post.title.slice(0,100),thumbnailUrl:thumbUrl}}:a.mimeType.startsWith('video/')?{video:{url:a.url,...(!linkedin&&post.format==='Reel'&&post.cover_offset>0?{metadata:{thumbnailOffset:post.cover_offset}}:{})}}:{image:{url:a.url}});
    if(Date.parse(dueAt)<=Date.now())throw Error('La hora prevista pasó durante la copia. Cambia la fecha antes de enviar.');
    await db.prepare("UPDATE buffer_jobs SET state='sending',snapshot=?,updated_at=? WHERE post_id=?").bind(JSON.stringify(input),stamp(),post.id).run();sending=true;
    const data=await bufferQuery(env,'mutation($input:CreatePostInput!){createPost(input:$input){__typename ... on PostActionSuccess{post{'+remotePostFields+'}} ... on MutationError{message}}}',{input});
@@ -143,7 +143,7 @@ export async function processStoryQueue(env:Env):Promise<void>{
  const job=await db.prepare("SELECT * FROM buffer_jobs WHERE state='queued' ORDER BY created_at LIMIT 1").first<any>();if(!job)return;
  const post=await db.prepare('SELECT * FROM posts WHERE id=?').bind(job.post_id).first<any>();
  const snapshot=JSON.parse(job.snapshot);
- if(!post||post.updated_at!==snapshot.approvedVersion||post.status!=='Aprobado'||!sendsToBuffer(post.channel,post.format)){
+ if(!post||post.updated_at!==snapshot.approvedVersion||post.status!=='Aprobado'||post.no_buffer||!sendsToBuffer(post.channel,post.format)){
   await db.prepare("UPDATE buffer_jobs SET state='error',error=?,updated_at=? WHERE post_id=? AND state='queued'").bind('La publicación cambió después de aprobarse. Solicita una nueva revisión.',stamp(),job.post_id).run();return;
  }
  const client=await db.prepare('SELECT id,archived FROM clients WHERE id=?').bind(post.client_id).first<any>();
