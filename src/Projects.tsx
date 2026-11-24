@@ -1,5 +1,6 @@
 import {startDrag,touchDrag} from './drag';
 import HaloSelect from './HaloSelect';
+import DatePicker from './DatePicker';
 import SlideIndicator from './SlideIndicator';
 import {useState,useEffect,useRef} from 'react';
 import {Pencil,Plus,Eye,EyeOff,CheckSquare,MessageCircle,X,ExternalLink,Check,Send,Trash2,Lock,Clock3,ImageOff,LayoutGrid,UserRound,Monitor,ChevronDown,Link2,NotebookPen} from 'lucide-react';
@@ -86,7 +87,7 @@ function TaskDrawer({data,project:p,task,busy,error,mutate,onClose}:{data:any;pr
    <h2 id="task-title" className="sr-only">{isNew?'Nueva tarea':task.title}</h2>
    <label>Título<input value={d.title} maxLength={160} required onChange={e=>set('title',e.target.value)}/></label>
    <div className="pe-g2"><label>Fase<HaloSelect value={d.phase_id} onChange={e=>set('phase_id',e.target.value)}>{phases.map((ph,i)=><option key={ph.id} value={ph.id}>{ph.name||'Fase '+(i+1)}</option>)}</HaloSelect></label><label>Estado<HaloSelect value={d.column_key} onChange={e=>set('column_key',e.target.value)}>{taskColumns.filter(([k])=>toReview||k!=='review').map(([k,l])=><option key={k} value={k}>{l}</option>)}</HaloSelect></label>
-    <label>Responsable<input list="pj-team" value={d.assignee} maxLength={80} placeholder="Sin asignar" onChange={e=>set('assignee',e.target.value)}/><datalist id="pj-team">{team.map(n=><option key={n} value={n}/>)}</datalist></label><label>Fecha límite<input type="date" value={d.due} onChange={e=>set('due',e.target.value)}/></label></div>
+    <label>Responsable<input list="pj-team" value={d.assignee} maxLength={80} placeholder="Sin asignar" onChange={e=>set('assignee',e.target.value)}/><datalist id="pj-team">{team.map(n=><option key={n} value={n}/>)}</datalist></label><label>Fecha límite<DatePicker value={d.due} onChange={v=>set('due',v)}/></label></div>
    <label>Descripción<textarea rows={3} value={d.description} maxLength={5000} placeholder="Qué hay que hacer y qué se espera" onChange={e=>set('description',e.target.value)}/></label>
    <div className="pj-toggles">
     <label className="pe-opt"><span><b>Visible para el cliente</b><small>Si está apagado, solo la ve el equipo.</small></span><input type="checkbox" role="switch" className="pe-switch" checked={d.visible} onChange={e=>set('visible',e.target.checked)}/></label>
