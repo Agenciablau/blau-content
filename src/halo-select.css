@@ -1,0 +1,38 @@
+/* Desplegable Halo (src/HaloSelect.tsx): borde degradado animado, relleno esmerilado, etiqueta escalonada y lista con entrada escalonada. */
+.halo{position:relative;display:block;width:100%;min-width:0;border-radius:12px;padding:1px;isolation:isolate}
+.halo-native{position:absolute;left:50%;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;padding:0;border:0;min-height:0}
+.halo-rim{position:absolute;inset:0;border-radius:12px;overflow:hidden;z-index:-1;background:#e3edf3;opacity:.62;transition:opacity .25s ease}
+.halo.open .halo-rim,.halo:focus-within .halo-rim{opacity:.9}
+.halo-rim i{position:absolute;bottom:-14px;left:0;border-radius:50%;filter:blur(14px);will-change:transform}
+.halo-rim i:nth-child(1){width:60%;height:40px;background:linear-gradient(90deg,#003680,#13dbfb,#6ee3ff);animation:halo-a 6s ease-in-out infinite}
+.halo-rim i:nth-child(2){width:40%;height:30px;background:linear-gradient(90deg,#13dbfb,#9ad9ff,#003680);animation:halo-b 5s ease-in-out infinite}
+.halo-rim i:nth-child(3){width:30%;height:26px;background:linear-gradient(90deg,#6ee3ff,#13dbfb,#3a6fd8);animation:halo-c 4s ease-in-out infinite}
+@keyframes halo-a{0%,100%{transform:translateX(-10%)}50%{transform:translateX(120%)}}
+@keyframes halo-b{0%,100%{transform:translateX(160%)}50%{transform:translateX(20%)}}
+@keyframes halo-c{0%,100%{transform:translateX(80%)}50%{transform:translateX(190%)}}
+.halo-trigger{all:unset;box-sizing:border-box;position:relative;display:flex;align-items:center;gap:8px;width:100%;min-height:42px;padding:5px 5px 5px 12px;border-radius:11px;border:1px solid rgba(200,214,226,.75);background:linear-gradient(to bottom,#fff,#f6fafc);color:var(--blau-ink,#0f1d2e);font:inherit;font-size:14px;line-height:1.4;cursor:pointer;box-shadow:0 1px 0 rgba(255,255,255,.55) inset,0 1px 2px rgba(0,0,0,.03),0 6px 18px rgba(0,0,0,.04);transition:border-color .2s ease,box-shadow .2s ease}
+.halo-trigger:hover{border-color:rgba(19,219,251,.55);box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 1px 3px rgba(0,0,0,.05),0 8px 22px rgba(0,0,0,.06)}
+.halo-trigger:focus-visible{border-color:rgba(0,54,128,.6);box-shadow:0 0 0 3px rgba(19,219,251,.3)}
+.halo.open .halo-trigger{border-color:rgba(0,54,128,.45);box-shadow:0 1px 0 rgba(255,255,255,.14) inset,0 1px 2px rgba(0,0,0,.09),0 4px 14px rgba(0,0,0,.11)}
+.halo.disabled{opacity:.55}.halo.disabled .halo-trigger{cursor:not-allowed}.halo.disabled .halo-rim i{animation:none}
+.halo-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.halo-value.placeholder{color:var(--blau-muted,#5b6b7b)}
+.halo-value>span{display:inline-block;white-space:pre;opacity:0;animation:halo-glyph .16s ease-out forwards}
+@keyframes halo-glyph{to{opacity:1}}
+.halo-thumb{position:relative;flex:none;width:30px;height:30px;border-radius:6px;background:#fff;box-shadow:0 1px 0 rgba(255,255,255,.85) inset,0 1px 2px rgba(0,0,0,.07),0 2px 10px rgba(0,0,0,.05),0 0 0 1px rgba(0,0,0,.08);color:var(--blau-muted,#5b6b7b)}
+.halo-trigger:hover .halo-thumb{box-shadow:0 1px 0 rgba(255,255,255,.85) inset,0 1px 2px rgba(0,0,0,.07),0 0 0 2px rgba(19,219,251,.25)}
+.halo-ico{position:absolute;inset:0;display:grid;place-items:center;opacity:0;transform:scale(.25);filter:blur(4px);transition:opacity .2s ease-out,transform .2s ease-out,filter .2s ease-out}
+.halo-ico.on{opacity:1;transform:none;filter:none}.halo-ico.check{color:#059669}
+.halo-ico svg{transition:transform .2s ease-out}.halo.open .halo-ico svg{transform:rotate(180deg)}.halo.open .halo-ico.check svg{transform:none}
+.halo-list{position:fixed;z-index:2000;max-height:288px;overflow:auto;padding:4px;border-radius:12px;border:1px solid rgba(200,214,226,.75);background:rgba(255,255,255,.92);backdrop-filter:blur(20px) saturate(1.5);-webkit-backdrop-filter:blur(20px) saturate(1.5);box-shadow:0 1px 0 rgba(255,255,255,.1) inset,0 1px 2px rgba(0,0,0,.04),0 10px 30px rgba(15,29,46,.12),0 0 0 1px rgba(0,0,0,.04);animation:halo-pop .15s ease-out;transform-origin:top;font-size:14px;color:var(--blau-ink,#0f1d2e)}
+.halo-list.up{transform:translateY(-100%);transform-origin:bottom;animation-name:halo-pop-up}
+@keyframes halo-pop{from{opacity:0;transform:translateY(-6px) scale(.95)}}
+@keyframes halo-pop-up{from{opacity:0;transform:translateY(calc(-100% + 6px)) scale(.95)}to{transform:translateY(-100%)}}
+.halo-item{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 10px;border-radius:8px;cursor:default;user-select:none;opacity:0;animation:halo-item .22s cubic-bezier(.2,0,0,1) forwards;transition:background-color .15s ease-out}
+.halo-item>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.halo-item.active{background:rgba(19,219,251,.12);color:var(--blau-navy,#003680)}.halo-item.off{opacity:.45!important;pointer-events:none}
+@keyframes halo-item{from{opacity:0;filter:blur(4px);transform:translateY(4px)}to{opacity:1;filter:none;transform:none}}
+.halo-empty{margin:0;padding:22px 12px;text-align:center;color:var(--blau-muted,#5b6b7b);font-size:13px}
+@media(prefers-reduced-motion:reduce){.halo-rim i,.halo-list,.halo-item,.halo-value>span{animation:none!important;opacity:1}.halo-ico,.halo-ico svg{transition:none}}
+.halo.pj-phase-sel{border:0;padding:1px;height:auto;background:none}
+.filters>.halo{flex:0 1 200px;width:auto;max-width:220px}.filters .halo-trigger{min-height:38px;font-size:12px}.filters .halo-thumb{width:26px;height:26px}
+@media(max-width:600px){.filters>.halo{flex:1;max-width:100%}}
