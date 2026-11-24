@@ -4,4 +4,5 @@ import Splash from './Splash';
 import './styles.css';
 import './apple.css';
 import './labs.css';
+import './halo-select.css';
 createRoot(document.getElementById('root')!).render(<><Planner/><Splash/></>);
