@@ -109,7 +109,7 @@ function Pieces({camp,moments,posts,staff,canEdit,onOpenPost,onNewIdea}:{camp:an
  const today=new Date().toLocaleDateString('sv-SE'),week=addDays(today,7),live=camp.status!=='draft';
  const [view,setView]=useState('lista'),[filter,setFilter]=useState('all'),[q,setQ]=useState(''),[net,setNet]=useState('');
  const [fold,setFold]=useState<Record<string,boolean>>(()=>{try{return JSON.parse(localStorage.getItem(foldKey(camp.id))||'{}')||{};}catch{return {};}});
- const toggle=(id:string,open:boolean)=>{const f={...fold,[id]:!open};setFold(f);try{localStorage.setItem(foldKey(camp.id),JSON.stringify(f));}catch{}};
+ const toggle=(id:string,open:boolean)=>{const f={...fold,[id]:open};setFold(f);try{localStorage.setItem(foldKey(camp.id),JSON.stringify(f));}catch{}};
  const risky=(p:any)=>canEdit&&early(p.status)&&pDay(p)>=today&&pDay(p)<=week;
  const turn=(p:any)=>turnOf(p,live);
  const sorted=[...posts].sort((a,b)=>(pDay(a)||'9999').localeCompare(pDay(b)||'9999')||String(a.title).localeCompare(String(b.title)));
