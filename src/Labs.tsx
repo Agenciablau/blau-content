@@ -1,4 +1,5 @@
-import {useMemo,useState} from 'react';
+import {useMemo,useRef,useState} from 'react';
+import {startDrag,touchDrag} from './drag';
 import HaloSelect from './HaloSelect';
 import DatePicker from './DatePicker';
 import SlideIndicator from './SlideIndicator';
@@ -105,9 +106,13 @@ const turnOf=(p:any,live:boolean)=>{const sel=readSelection(p.selection);if((p.s
 const matLabel:Record<string,string>={have:'Ya lo tenemos',create:'Hay que crearlo',brand:'De las marcas'};
 const foldKey=(id:string)=>'blau:labs-fold:'+id;
 /** Piezas: momentos plegables con su avance, filtros por turno y riesgo, y vista de tablero por estados. */
-function Pieces({camp,moments,posts,staff,canEdit,onOpenPost,onNewIdea}:{camp:any;moments:Moment[];posts:any[];staff:boolean;canEdit:boolean;onOpenPost:(p:any)=>void;onNewIdea:(campaignId:string,momentId:string,clientId:string)=>void}){
+/** Arrastrar en el tablero: solo los cambios que el equipo puede hacer sin el cliente. Devuelve el estado nuevo o ''. */
+const boardMove=(p:any,col:string)=>col==='Ideas'?(p.status==='Borrador'?'Idea':''):col==='En curso'?(early(p.status)?'Borrador':''):col==='Aprobadas'?(p.status==='Planificado'?'Aprobado':''):col==='Planificadas'?(p.status==='Aprobado'?'Planificado':''):col==='Publicadas'?(['Aprobado','Planificado'].includes(p.status)?'Publicado':''):'';
+function Pieces({camp,moments,posts,staff,canEdit,busy,mutate,onOpenPost,onNewIdea}:{camp:any;moments:Moment[];posts:any[];staff:boolean;canEdit:boolean;busy:boolean;mutate:(body:any,msg:string)=>Promise<any>;onOpenPost:(p:any)=>void;onNewIdea:(campaignId:string,momentId:string,clientId:string)=>void}){
  const today=new Date().toLocaleDateString('sv-SE'),week=addDays(today,7),live=camp.status!=='draft';
  const [view,setView]=useState('lista'),[filter,setFilter]=useState('all'),[q,setQ]=useState(''),[net,setNet]=useState('');
+ const drag=useRef<any>(null),[dragId,setDragId]=useState(''),[over,setOver]=useState('');
+ const drop=(col:string)=>{const p=drag.current,st=p?boardMove(p,col):'';drag.current=null;setOver('');setDragId('');if(!p||!st)return;if(st==='Publicado'&&!confirm(`¿Marcar «${p.title}» como publicada? Una pieza publicada ya no se puede editar.`))return;mutate({...p,action:'post',status:st},`«${p.title}» pasa a ${st}`);};
  const [fold,setFold]=useState<Record<string,boolean>>(()=>{try{return JSON.parse(localStorage.getItem(foldKey(camp.id))||'{}')||{};}catch{return {};}});
  const toggle=(id:string,open:boolean)=>{const f={...fold,[id]:open};setFold(f);try{localStorage.setItem(foldKey(camp.id),JSON.stringify(f));}catch{}};
  const risky=(p:any)=>canEdit&&early(p.status)&&pDay(p)>=today&&pDay(p)<=week;
@@ -130,9 +135,9 @@ function Pieces({camp,moments,posts,staff,canEdit,onOpenPost,onNewIdea}:{camp:an
    <div className="lp-end">{nets.length>1&&<HaloSelect aria-label="Red" value={net} onChange={e=>setNet(e.target.value)}><option value="">Todas las redes</option>{nets.map(n=><option key={n} value={n}>{n}</option>)}</HaloSelect>}
     <div className="segmented lb-who" role="tablist"><SlideIndicator active={view}/><button type="button" role="tab" aria-selected={view==='lista'} className={view==='lista'?'active':''} onClick={()=>setView('lista')}>Lista</button><button type="button" role="tab" aria-selected={view==='tablero'} className={view==='tablero'?'active':''} onClick={()=>setView('tablero')}>Tablero</button></div></div></div>
   {!posts.length?<section className="lb-card static"><p className="lb-empty">Aún no hay piezas. {canEdit?'Crea la primera idea o asigna una publicación a esta campaña desde su ficha.':''}</p>{canEdit&&moments.length>0&&<div className="lp-adds">{moments.map(m=><button key={m.id} className="text-btn" onClick={()=>onNewIdea(camp.id,m.id,camp.client_id)}><Plus size={14}/>Idea en «{m.name}»</button>)}</div>}</section>
-  :view==='tablero'?<div className="lp-board">{[...stGroups].reverse().map(([l,ss,c])=>{const ps=shown.filter(p=>ss.includes(p.status));return <div key={l} className="lp-col"><h4><i style={{background:c}}/>{l}<b>{ps.length}</b></h4>
-    {ps.map(p=>{const mi=moments.findIndex(m=>m.id===p.moment_id);return <button key={p.id} type="button" className={'lp-card'+(risky(p)?' risk':'')} style={{'--m':mi<0?'var(--ap-fill)':hue[mi%hue.length]} as any} onClick={()=>onOpenPost(p)}><b>{p.title}</b><small><span>{[p.channel,p.format].filter(Boolean).join(' · ')}</span><span>{pDay(p)?fmtD(pDay(p)):'Sin fecha'}</span></small>{turn(p)&&<Turn p={p}/>}</button>;})}
-    {!ps.length&&<p className="lp-none">Nada aquí</p>}</div>;})}</div>
+  :view==='tablero'?<>{canEdit&&<p className="lp-hint">Arrastra una pieza para cambiar su estado: de idea a en curso (y vuelta), de aprobada a planificada (y vuelta) y a publicada. Aprobar sigue siendo cosa del cliente.</p>}<div className="lp-board">{[...stGroups].reverse().map(([l,ss,c])=>{const ps=shown.filter(p=>ss.includes(p.status)),can=!!dragId&&!!drag.current&&!!boardMove(drag.current,l);return <div key={l} className={'lp-col'+(dragId?can?' can':' no':'')+(over===l&&can?' drop':'')} data-drop={l} onDragOver={e=>{if(drag.current&&boardMove(drag.current,l)){e.preventDefault();setOver(l);}}} onDragLeave={()=>setOver(o=>o===l?'':o)} onDrop={e=>{e.preventDefault();drop(l);}}><h4><i style={{background:c}}/>{l}<b>{ps.length}</b></h4>
+    {ps.map(p=>{const mi=moments.findIndex(m=>m.id===p.moment_id);const dr=canEdit&&!busy&&p.status!=='Publicado';return <button key={p.id} type="button" className={'lp-card'+(risky(p)?' risk':'')+(dragId===p.id?' dragging':'')+(dr?' grab':'')} draggable={dr} onDragStart={e=>{if(!startDrag(e))return;drag.current=p;setTimeout(()=>setDragId(p.id),0);}} onDragEnd={()=>{drag.current=null;setOver('');setDragId('');}} onTouchStart={e=>{if(dr)touchDrag(e,{start:()=>{drag.current=p;setDragId(p.id);},over:setOver,drop,end:()=>{drag.current=null;setOver('');setDragId('');}});}} style={{'--m':mi<0?'var(--ap-fill)':hue[mi%hue.length]} as any} onClick={()=>onOpenPost(p)}><b>{p.title}</b><small><span>{[p.channel,p.format].filter(Boolean).join(' · ')}</span><span>{pDay(p)?fmtD(pDay(p)):'Sin fecha'}</span></small>{turn(p)&&<Turn p={p}/>}</button>;})}
+    {!ps.length&&<p className="lp-none">Nada aquí</p>}</div>;})}</div></>
   :<>{groups.map(({id,m,i,ps,all})=>{if(!all.length&&(!m||!canEdit))return null;if(narrowed&&!ps.length)return null;
     const st=!m?'':m.end<today?'past':m.start<=today?'cur':'next',open=narrowed||(fold[id]!==undefined?!fold[id]:st!=='past'),pub=all.filter(p=>p.status==='Publicado').length;
     return <section key={id||'none'} className={'lb-card static lp-grp'+(open?' open':'')}><div className="lp-gh"><button type="button" className="lp-gh-btn" aria-expanded={open} onClick={()=>toggle(id,open)} disabled={narrowed}>
@@ -162,7 +167,7 @@ export default function Labs({data,busy,error,mutate,clientId,staff,owner,previe
    {!staff&&mine.length>0&&<div className="lb-callout"><Hourglass size={20}/><div><b>{mine.length===1?'Tienes 1 cosa pendiente de ti':`Tienes ${mine.length} cosas pendientes de ti`}</b><span>Estas ideas se deciden contigo. Ábrelas, elige o aprueba y añade lo que quieras.</span></div><button className="primary" onClick={()=>onOpenPost(mine[0])}>Responder ahora</button></div>}
    <div className="segmented lb-tabs" role="tablist"><SlideIndicator active={tab}/>{tabs.map(([k,l])=><button key={k} role="tab" aria-selected={tab===k} className={tab===k?'active':''} onClick={()=>setTab(k)}>{l}</button>)}</div>
    {tab==='resumen'&&<Summary camp={camp} moments={moments} posts={posts} goals={goals} numbers={numbers} canEdit={canEdit} staff={staff} onOpenPost={onOpenPost}/>}
-   {tab==='piezas'&&<Pieces camp={camp} moments={moments} posts={posts} staff={staff} canEdit={canEdit} onOpenPost={onOpenPost} onNewIdea={onNewIdea}/>}
+   {tab==='piezas'&&<Pieces camp={camp} moments={moments} posts={posts} staff={staff} canEdit={canEdit} busy={busy} mutate={mutate} onOpenPost={onOpenPost} onNewIdea={onNewIdea}/>}
    {tab==='calendario'&&<CampaignCalendar moments={moments} posts={posts} onOpenPost={onOpenPost}/>}
    {tab==='produccion'&&canEdit&&<Production posts={posts} busy={busy} mutate={mutate} onOpenPost={onOpenPost}/>}
    {tab==='numeros'&&<section className="lb-card static"><div className="lb-row"><h2>Presupuesto</h2>{canEdit&&<button className="secondary-btn" onClick={()=>setEditing(camp.id)}><Pencil size={15}/>Editar</button>}</div>
