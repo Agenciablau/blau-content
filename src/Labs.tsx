@@ -3,7 +3,7 @@ import HaloSelect from './HaloSelect';
 import DatePicker from './DatePicker';
 import SlideIndicator from './SlideIndicator';
 import {ChannelIcon} from './ReviewThumb';
-import {FlaskConical,Plus,X,Send,Check,CheckCheck,Trash2,ChevronLeft,ChevronRight,Pencil,Hourglass,Lock,ChevronDown,ListChecks,CalendarClock,Clapperboard} from 'lucide-react';
+import {FlaskConical,Plus,X,Send,Check,CheckCheck,Trash2,ChevronLeft,ChevronRight,Pencil,Hourglass,Lock,ChevronDown,ListChecks,CalendarClock,Clapperboard,Search,TriangleAlert} from 'lucide-react';
 import {campaignStatuses,readSelection,hasElements,materialSources} from '../shared/labs';
 import type {Option,Moment,Objective,Selection} from '../shared/labs';
 import {commitmentCategories,readClientProfile} from '../shared/client-profile';
@@ -101,6 +101,48 @@ function Summary({camp,moments,posts,goals,numbers,canEdit,staff,onOpenPost}:{ca
    {canEdit&&<section className="lb-card static"><h2 className="lr-h2s">Qué ve el cliente</h2><div className="lr-sees"><span><Check size={12}/>Concepto, objetivos y momentos</span><span><Check size={12}/>Ideas en marcha</span><span className={camp.show_numbers?'':'off'}>{camp.show_numbers?<Check size={12}/>:<Lock size={12}/>}Presupuesto</span><span className="off"><Lock size={12}/>Borradores y notas internas</span></div>{camp.status==='draft'&&<p className="lr-sub">La campaña está en borrador: el cliente aún no la ve. Pásala a «En marcha» al editarla.</p>}</section>}
   </div></div></>;
 }
+const turnOf=(p:any,live:boolean)=>{const sel=readSelection(p.selection);if((p.status==='Idea'&&live&&!sel?.answered_at)||p.status==='En revisión')return 'client';if((p.status==='Idea'&&sel?.answered_at)||['Idea aprobada','Borrador','Cambios solicitados'].includes(p.status))return 'team';return '';};
+const matLabel:Record<string,string>={have:'Ya lo tenemos',create:'Hay que crearlo',brand:'De las marcas'};
+const foldKey=(id:string)=>'blau:labs-fold:'+id;
+/** Piezas: momentos plegables con su avance, filtros por turno y riesgo, y vista de tablero por estados. */
+function Pieces({camp,moments,posts,staff,canEdit,onOpenPost,onNewIdea}:{camp:any;moments:Moment[];posts:any[];staff:boolean;canEdit:boolean;onOpenPost:(p:any)=>void;onNewIdea:(campaignId:string,momentId:string,clientId:string)=>void}){
+ const today=new Date().toLocaleDateString('sv-SE'),week=addDays(today,7),live=camp.status!=='draft';
+ const [view,setView]=useState('lista'),[filter,setFilter]=useState('all'),[q,setQ]=useState(''),[net,setNet]=useState('');
+ const [fold,setFold]=useState<Record<string,boolean>>(()=>{try{return JSON.parse(localStorage.getItem(foldKey(camp.id))||'{}')||{};}catch{return {};}});
+ const toggle=(id:string,open:boolean)=>{const f={...fold,[id]:!open};setFold(f);try{localStorage.setItem(foldKey(camp.id),JSON.stringify(f));}catch{}};
+ const risky=(p:any)=>canEdit&&early(p.status)&&pDay(p)>=today&&pDay(p)<=week;
+ const turn=(p:any)=>turnOf(p,live);
+ const sorted=[...posts].sort((a,b)=>(pDay(a)||'9999').localeCompare(pDay(b)||'9999')||String(a.title).localeCompare(String(b.title)));
+ const nets=[...new Set(posts.map(p=>p.channel).filter(Boolean))].sort();
+ const filters:[string,string,(p:any)=>boolean][]=[['all','Todas',()=>true],...(canEdit?[['risk','En riesgo',risky] as [string,string,(p:any)=>boolean]]:[]),['client',staff?'Esperan al cliente':'Pendientes de ti',p=>turn(p)==='client'],['team',staff?'Toca al equipo':'Las hace el equipo',p=>turn(p)==='team'],['done','Publicadas',p=>p.status==='Publicado']];
+ const base=sorted.filter(p=>(!net||p.channel===net)&&(!q.trim()||String(p.title).toLowerCase().includes(q.trim().toLowerCase())));
+ const shown=base.filter(filters.find(f=>f[0]===filter)?.[2]??(()=>true)),narrowed=filter!=='all'||!!q.trim()||!!net;
+ const when=(p:any)=>{const n=between(today,pDay(p));return n===0?'hoy':n===1?'mañana':`en ${n} días`;};
+ const Turn=({p}:{p:any})=>{const t=turn(p);return t==='client'?<span className="lp-turn client"><i>C</i>{staff?'Espera al cliente':'Pendiente de ti'}</span>:t==='team'?<span className="lp-turn team"><i>B</i>{staff?'Toca al equipo':'Lo hace el equipo'}</span>:<span className="lp-turn none"/>;};
+ const Day=({p}:{p:any})=>{const d=pDay(p);if(!d)return <span className="lp-day none"><small>Sin</small><b>—</b></span>;const t=new Date(ts(d));return <span className={'lp-day'+(d<today?' past':d===today?' today':'')}><small>{t.toLocaleDateString('es-ES',{weekday:'short',timeZone:'UTC'}).replace('.','')}</small><b>{t.getUTCDate()}</b>{d.slice(0,7)!==today.slice(0,7)&&<small>{t.toLocaleDateString('es-ES',{month:'short',timeZone:'UTC'}).replace('.','')}</small>}</span>;};
+ const Row=({p}:{p:any})=>{const sel=readSelection(p.selection),r=risky(p);return <button type="button" className={'lp-row'+(r?' risk':'')+(canEdit?'':' nomat')} onClick={()=>onOpenPost(p)}><Day p={p}/><span className="lp-ico"><ChannelIcon channel={p.channel}/></span>
+  <span className="lp-t"><b>{p.title}{sel&&<em>Con opciones</em>}</b><small>{[p.channel,p.format].filter(Boolean).join(' · ')}</small>{r&&<small className="lp-risk">Se publica {when(p)} y aún no está producida</small>}</span>
+  <Turn p={p}/>{canEdit&&<span className={'lp-mat'+(!p.material&&p.status!=='Publicado'?' warn':'')}>{p.status==='Publicado'?'':matLabel[p.material]??'Sin definir'}</span>}<Chip status={p.status}/></button>;};
+ const groups=[...moments.map((m,i)=>({id:m.id,m,i,ps:shown.filter(p=>p.moment_id===m.id),all:posts.filter(p=>p.moment_id===m.id)})),{id:'',m:null as Moment|null,i:-1,ps:shown.filter(p=>!moments.some(m=>m.id===p.moment_id)),all:posts.filter(p=>!moments.some(m=>m.id===p.moment_id))}];
+ return <div className="lp">
+  <div className="lp-tools"><label className="lp-search"><Search size={15}/><input type="search" placeholder="Buscar pieza…" value={q} onChange={e=>setQ(e.target.value)} aria-label="Buscar pieza"/></label>
+   <div className="lp-filters" role="group" aria-label="Filtrar piezas">{filters.map(([k,l,fn])=>{const n=base.filter(fn).length;return <button key={k} type="button" aria-pressed={filter===k} className={'lp-f'+(filter===k?' on':'')+(k==='risk'&&n?' hot':'')} onClick={()=>setFilter(k)}>{k==='risk'&&<TriangleAlert size={13}/>}{l}<b>{n}</b></button>;})}</div>
+   <div className="lp-end">{nets.length>1&&<HaloSelect aria-label="Red" value={net} onChange={e=>setNet(e.target.value)}><option value="">Todas las redes</option>{nets.map(n=><option key={n} value={n}>{n}</option>)}</HaloSelect>}
+    <div className="segmented lb-who" role="tablist"><SlideIndicator active={view}/><button type="button" role="tab" aria-selected={view==='lista'} className={view==='lista'?'active':''} onClick={()=>setView('lista')}>Lista</button><button type="button" role="tab" aria-selected={view==='tablero'} className={view==='tablero'?'active':''} onClick={()=>setView('tablero')}>Tablero</button></div></div></div>
+  {!posts.length?<section className="lb-card static"><p className="lb-empty">Aún no hay piezas. {canEdit?'Crea la primera idea o asigna una publicación a esta campaña desde su ficha.':''}</p>{canEdit&&moments.length>0&&<div className="lp-adds">{moments.map(m=><button key={m.id} className="text-btn" onClick={()=>onNewIdea(camp.id,m.id,camp.client_id)}><Plus size={14}/>Idea en «{m.name}»</button>)}</div>}</section>
+  :view==='tablero'?<div className="lp-board">{[...stGroups].reverse().map(([l,ss,c])=>{const ps=shown.filter(p=>ss.includes(p.status));return <div key={l} className="lp-col"><h4><i style={{background:c}}/>{l}<b>{ps.length}</b></h4>
+    {ps.map(p=>{const mi=moments.findIndex(m=>m.id===p.moment_id);return <button key={p.id} type="button" className={'lp-card'+(risky(p)?' risk':'')} style={{'--m':mi<0?'var(--ap-fill)':hue[mi%hue.length]} as any} onClick={()=>onOpenPost(p)}><b>{p.title}</b><small><span>{[p.channel,p.format].filter(Boolean).join(' · ')}</span><span>{pDay(p)?fmtD(pDay(p)):'Sin fecha'}</span></small>{turn(p)&&<Turn p={p}/>}</button>;})}
+    {!ps.length&&<p className="lp-none">Nada aquí</p>}</div>;})}</div>
+  :<>{groups.map(({id,m,i,ps,all})=>{if(!all.length&&(!m||!canEdit))return null;if(narrowed&&!ps.length)return null;
+    const st=!m?'':m.end<today?'past':m.start<=today?'cur':'next',open=narrowed||(fold[id]!==undefined?!fold[id]:st!=='past'),pub=all.filter(p=>p.status==='Publicado').length;
+    return <section key={id||'none'} className={'lb-card static lp-grp'+(open?' open':'')}><div className="lp-gh"><button type="button" className="lp-gh-btn" aria-expanded={open} onClick={()=>toggle(id,open)} disabled={narrowed}>
+      {m?<i className="lp-dot" style={{background:hue[i%hue.length]}}/>:<i className="lp-dot" style={{background:'var(--ap-fill)'}}/>}<span className="lp-gh-t"><b>{m?m.name:'Sin momento'}</b>{st==='cur'&&<span className="lr-now">Ahora</span>}{st==='past'&&pub===all.length&&all.length>0&&<span className="lr-tag ok"><Check size={11}/>Hecho</span>}<small>{m?`${fmtD(m.start)} – ${fmtD(m.end)} · `:''}{pl(all.length,'pieza','piezas')}</small></span>
+      {all.length>0&&<span className="lp-prog"><StatBar posts={all}/><small>{pub} de {all.length} {all.length===1?'publicada':'publicadas'}</small></span>}{!narrowed&&<ChevronDown size={17} className="lp-chev"/>}</button>
+     {canEdit&&<button className="text-btn" onClick={()=>onNewIdea(camp.id,id,camp.client_id)}><Plus size={14}/>Idea</button>}</div>
+     {open&&<div className="lp-rows">{ps.map(p=><Row key={p.id} p={p}/>)}{!ps.length&&<p className="lb-empty lp-pad">Sin piezas todavía.</p>}</div>}</section>;})}
+   {narrowed&&!shown.length&&<section className="lb-card static"><p className="lb-empty">Ninguna pieza coincide con el filtro.</p></section>}</>}
+ </div>;
+}
 export default function Labs({data,busy,error,mutate,clientId,staff,owner,preview,onOpenPost,onNewIdea}:Props){
  const [openId,setOpenId]=useState<string|null>(null),[tab,setTab]=useState('resumen'),[editing,setEditing]=useState<string|null>(null),[filter,setFilter]=useState('active');
  const clients=data.clients.filter((c:any)=>!c.archived),canEdit=staff&&!preview;
@@ -120,7 +162,7 @@ export default function Labs({data,busy,error,mutate,clientId,staff,owner,previe
    {!staff&&mine.length>0&&<div className="lb-callout"><Hourglass size={20}/><div><b>{mine.length===1?'Tienes 1 cosa pendiente de ti':`Tienes ${mine.length} cosas pendientes de ti`}</b><span>Estas ideas se deciden contigo. Ábrelas, elige o aprueba y añade lo que quieras.</span></div><button className="primary" onClick={()=>onOpenPost(mine[0])}>Responder ahora</button></div>}
    <div className="segmented lb-tabs" role="tablist"><SlideIndicator active={tab}/>{tabs.map(([k,l])=><button key={k} role="tab" aria-selected={tab===k} className={tab===k?'active':''} onClick={()=>setTab(k)}>{l}</button>)}</div>
    {tab==='resumen'&&<Summary camp={camp} moments={moments} posts={posts} goals={goals} numbers={numbers} canEdit={canEdit} staff={staff} onOpenPost={onOpenPost}/>}
-   {tab==='piezas'&&<section className="lb-card static"><div className="lb-list">{[...moments.map(m=>({id:m.id,name:m.name})),{id:'',name:'Sin momento'}].map(m=>{const ps=posts.filter(p=>p.moment_id===m.id);if(!ps.length&&(m.id===''||!canEdit))return null;return <div key={m.id||'none'} className="lb-group"><div className="lb-row"><h3>{m.name}</h3>{canEdit&&<button className="text-btn" onClick={()=>onNewIdea(camp.id,m.id,camp.client_id)}><Plus size={14}/>Idea</button>}</div>{!ps.length&&<p className="lb-empty">Sin piezas todavía.</p>}{ps.map(p=>{const sel=readSelection(p.selection);return <button key={p.id} className="lb-item" onClick={()=>onOpenPost(p)}><Net p={p}/><div><b>{p.title}</b><small>{p.channel}{p.date?' · '+fmtD(p.date.slice(0,10)):' · Sin fecha'}{sel?' · Con opciones':''}</small></div>{staff&&waiting(p)&&<span className="lb-wait"><Hourglass size={12}/>{sel?.answered_at?'Respondida':'Esperando al cliente'}</span>}{!staff&&waiting(p)&&<span className="lb-wait"><Hourglass size={12}/>Pendiente de ti</span>}<Chip status={p.status}/></button>;})}</div>;})}{!posts.length&&<p className="lb-empty">Aún no hay piezas. {canEdit?'Crea la primera idea o asigna una publicación a esta campaña desde su ficha.':''}</p>}</div></section>}
+   {tab==='piezas'&&<Pieces camp={camp} moments={moments} posts={posts} staff={staff} canEdit={canEdit} onOpenPost={onOpenPost} onNewIdea={onNewIdea}/>}
    {tab==='calendario'&&<CampaignCalendar moments={moments} posts={posts} onOpenPost={onOpenPost}/>}
    {tab==='produccion'&&canEdit&&<Production posts={posts} busy={busy} mutate={mutate} onOpenPost={onOpenPost}/>}
    {tab==='numeros'&&<section className="lb-card static"><div className="lb-row"><h2>Presupuesto</h2>{canEdit&&<button className="secondary-btn" onClick={()=>setEditing(camp.id)}><Pencil size={15}/>Editar</button>}</div>
