@@ -228,3 +228,6 @@ html body .lb-final{flex-direction:row!important;align-items:center}.lb-final in
  .lp-row,.lp-row.nomat{grid-template-columns:44px minmax(0,1fr) auto;gap:4px 10px;padding:10px 14px}.lp-ico,.lp-mat{display:none}
  .lp-row .lp-day{grid-row:1/3}.lp-row .lp-turn{grid-column:2;grid-row:2}.lp-row .lp-turn.none{display:none}.lp-row>.lb-chip{grid-column:3;grid-row:1}
  .lp-board{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px}.lp-col{flex:none;width:250px;scroll-snap-align:start}}
+.lp-card.grab{cursor:grab}.lp-card.dragging{opacity:.35}
+.lp-col{transition:background .15s,box-shadow .15s,opacity .15s}.lp-col.can{box-shadow:inset 0 0 0 2px rgba(19,219,251,.45)}.lp-col.no{opacity:.55}.lp-col.drop{background:rgba(19,219,251,.14);box-shadow:inset 0 0 0 2px var(--ap-cyan)}
+.lp-hint{margin:-6px 0 0;font-size:12.5px;color:var(--ap-2)}
